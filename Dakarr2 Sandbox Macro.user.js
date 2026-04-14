@@ -2,7 +2,7 @@
 // @name         Dakarr2 Sandbox Macro
 // @namespace    http://tampermonkey.net/
 // @version      1.0.0
-// @description  Build macro for dakarr2.cc sandbox server with pointer-lock fix. Press P to run macro.
+// @description  Build macro for dakarr2.cc sandbox server with pointer-lock fix. Press P or ' to run macro.
 // @match        *://dakarr2.cc/*
 // @match        *://*.dakarr2.cc/*
 // @grant        none
@@ -256,12 +256,17 @@
     }
 
     // =========================================================================
-    // 6. HOTKEY  (press P to fire the macro)
+    // 6. HOTKEY  (press P or ' to fire the macro)
     // =========================================================================
     document.addEventListener(
         "keydown",
         function (e) {
-            if (e.code === "KeyP" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            if (
+                (e.code === "KeyP" || e.code === "Quote") &&
+                !e.ctrlKey &&
+                !e.altKey &&
+                !e.metaKey
+            ) {
                 e.preventDefault();
                 e.stopPropagation();
                 runMacro();
@@ -275,7 +280,7 @@
     // =========================================================================
     function boot() {
         console.log("[Dakarr2 Macro] v1.0.0 loaded for sandbox server");
-        console.log("[Dakarr2 Macro] Press P to run build macro");
+        console.log("[Dakarr2 Macro] Press P or ' to run build macro");
         console.log(
             "[Dakarr2 Macro] Sequence: ` hold → 2 → ` release → I → M hold → 6 5 4 7 3 → M release → left-click"
         );
