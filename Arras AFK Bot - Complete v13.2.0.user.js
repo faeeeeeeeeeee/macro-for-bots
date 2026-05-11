@@ -791,15 +791,15 @@
   // Twin(Y) -> Triple Shot(U) -> ...
   "yuy": { name: "Penta Shot", path: "yuy", stats: "0/0/0/9/9/9/9/6" },
   "yuu": { name: "Spreadshot", path: "yuu", stats: "0/0/0/9/9/9/9/6" },
-  "yui": { name: "Bent Hybrid", path: "yui", stats: "0/0/0/9/9/9/9/6" },
+  "yui": { name: "Bent Hybrid", path: "yui", stats: "0/3/5/8/8/8/7/3" },
   "yuh": { name: "Bent Double", path: "yuh", stats: "0/0/0/9/9/9/9/6" },
   "yuj": { name: "Triplet", path: "yuj", stats: "0/0/0/9/9/9/9/6" },
   // Twin(Y) -> Gunner(I) -> ...
   "yiy": { name: "Auto-Gunner", path: "yiy", stats: "0/0/0/9/9/9/9/6" },
   "yiu": { name: "Nailgun", path: "yiu", stats: "0/0/0/9/9/9/9/6" },
-  "yii": { name: "Auto-4", path: "yii", stats: "0/0/0/9/9/9/9/6" },
+  "yii": { name: "Auto-4", path: "yii", stats: "0/3/5/8/8/8/7/3" },
   "yih": { name: "Machine Gunner", path: "yih", stats: "0/0/0/9/9/9/9/6" },
-  "yij": { name: "Gunner Trapper", path: "yij", stats: "0/0/0/9/9/9/9/6" },
+  "yij": { name: "Gunner Trapper", path: "yij", stats: "0/3/2/8/8/9/9/3" },
   "yik": { name: "Cyclone", path: "yik", stats: "0/0/0/9/9/9/9/6" },
   // Twin(Y) -> Hexa Tank(H) -> ...
   "yhy": { name: "Octo Tank", path: "yhy", stats: "0/0/0/9/9/9/9/6" },
@@ -807,7 +807,7 @@
 
   // --- Sniper Branch (U) ---
   // Sniper(U) -> Assassin(Y) -> ...
-  "uyy": { name: "Falcon", path: "uyy", stats: "0/0/0/9/9/9/9/6" },
+  "uyy": { name: "Falcon", path: "uyy", stats: "0/5/0/7/7/9/7/7" },
   "uyu": { name: "Ranger", path: "uyu", stats: "0/0/0/9/9/9/9/6" },
   "uyi": { name: "Stalker", path: "uyi", stats: "0/0/0/9/9/9/9/6" },
   "uyh": { name: "Auto-Assassin", path: "uyh", stats: "0/0/0/9/9/9/9/6" },
@@ -825,7 +825,7 @@
   // Machine Gun(I) -> Artillery(Y) -> ...
   "iyy": { name: "Mortar", path: "iyy", stats: "0/0/0/9/9/9/9/6" },
   "iyu": { name: "Spreadshot", path: "iyu", stats: "0/0/0/9/9/9/9/6" },
-  "iyi": { name: "Skimmer", path: "iyi", stats: "0/0/0/9/9/9/9/6" },
+  "iyi": { name: "Skimmer", path: "iyi", stats: "0/3/5/8/8/8/7/3" },
   // Machine Gun(I) -> Minigun(U) -> ...
   "iuy": { name: "Streamliner", path: "iuy", stats: "0/0/0/9/9/9/9/6" },
   "iuu": { name: "Nailgun", path: "iuu", stats: "0/0/0/9/9/9/9/6" },
@@ -838,50 +838,50 @@
   "hyy": { name: "Octo Tank", path: "hyy", stats: "0/0/0/9/9/9/9/6" },
   "hyu": { name: "Cyclone", path: "hyu", stats: "0/0/0/9/9/9/9/6" },
   // Flank Guard(H) -> Tri-Angle(U) -> ...
-  "huy": { name: "Fighter", path: "huy", stats: "0/0/0/9/9/9/9/6" },
-  "huu": { name: "Booster", path: "huu", stats: "0/0/0/9/9/9/9/6" },
-  "hui": { name: "Falcon", path: "hui", stats: "0/0/0/9/9/9/9/6" },
-  "huh": { name: "Bomber", path: "huh", stats: "0/0/0/9/9/9/9/6" },
-  "huj": { name: "Auto-Tri-Angle", path: "huj", stats: "0/0/0/9/9/9/9/6" },
+  "huy": { name: "Fighter", path: "huy", stats: "0/5/0/7/7/9/7/7" },
+  "huu": { name: "Booster", path: "huu", stats: "0/5/0/7/7/9/7/7" },
+  "hui": { name: "Falcon", path: "hui", stats: "0/5/0/7/7/9/7/7" },
+  "huh": { name: "Bomber", path: "huh", stats: "0/5/0/7/7/9/7/7" },
+  "huj": { name: "Auto-Tri-Angle", path: "huj", stats: "0/5/0/7/7/9/7/7" },
   // Flank Guard(H) -> Auto-3(I) -> ...
-  "hiy": { name: "Auto-5", path: "hiy", stats: "0/0/0/9/9/9/9/6" },
-  "hiu": { name: "Mega-3", path: "hiu", stats: "0/0/0/9/9/9/9/6" },
-  "hii": { name: "Auto-4", path: "hii", stats: "0/0/0/9/9/9/9/6" },
-  "hih": { name: "Banshee", path: "hih", stats: "0/0/0/9/9/9/9/6" },
+  "hiy": { name: "Auto-5", path: "hiy", stats: "0/3/5/8/8/8/7/3" },
+  "hiu": { name: "Mega-3", path: "hiu", stats: "0/3/5/8/8/8/7/3" },
+  "hii": { name: "Auto-4", path: "hii", stats: "0/3/5/8/8/8/7/3" },
+  "hih": { name: "Banshee", path: "hih", stats: "0/3/5/8/8/8/7/3" },
 
   // --- Director Branch (J) ---
   // Director(J) -> Overseer(Y) -> ...
-  "jyy": { name: "Overlord", path: "jyy", stats: "0/0/0/9/9/9/9/6" },
-  "jyu": { name: "Overtrapper", path: "jyu", stats: "0/0/0/9/9/9/9/6" },
-  "jyi": { name: "Overgunner", path: "jyi", stats: "0/0/0/9/9/9/9/6" },
-  "jyh": { name: "Banshee", path: "jyh", stats: "0/0/0/9/9/9/9/6" },
-  "jyj": { name: "Auto-Overseer", path: "jyj", stats: "0/0/0/9/9/9/9/6" },
-  "jyk": { name: "Overdrive", path: "jyk", stats: "0/0/0/9/9/9/9/6" },
+  "jyy": { name: "Overlord", path: "jyy", stats: "0/3/5/8/8/8/7/3" },
+  "jyu": { name: "Overtrapper", path: "jyu", stats: "0/3/5/8/8/9/6/3" },
+  "jyi": { name: "Overgunner", path: "jyi", stats: "0/3/5/8/8/8/7/3" },
+  "jyh": { name: "Banshee", path: "jyh", stats: "0/3/5/8/8/8/7/3" },
+  "jyj": { name: "Auto-Overseer", path: "jyj", stats: "0/3/5/8/8/8/7/3" },
+  "jyk": { name: "Overdrive", path: "jyk", stats: "0/3/5/8/8/8/7/3" },
   // Director(J) -> Cruiser(U) -> ...
-  "juy": { name: "Carrier", path: "juy", stats: "0/0/0/9/9/9/9/6" },
-  "juu": { name: "Battleship", path: "juu", stats: "0/0/0/9/9/9/9/6" },
-  "jui": { name: "Fortress", path: "jui", stats: "0/0/0/9/9/9/9/6" },
+  "juy": { name: "Carrier", path: "juy", stats: "0/3/5/8/8/8/7/3" },
+  "juu": { name: "Battleship", path: "juu", stats: "0/3/5/8/8/8/7/3" },
+  "jui": { name: "Fortress", path: "jui", stats: "0/3/2/8/8/9/9/3" },
   // Director(J) -> Underseer(I) -> ...
-  "jiy": { name: "Necromancer", path: "jiy", stats: "0/0/0/9/9/9/9/6" },
-  "jiu": { name: "Maleficitor", path: "jiu", stats: "0/0/0/9/9/9/9/6" },
+  "jiy": { name: "Necromancer", path: "jiy", stats: "0/3/5/8/8/8/7/3" },
+  "jiu": { name: "Maleficitor", path: "jiu", stats: "0/3/5/8/8/8/7/3" },
   // Director(J) -> Spawner(H) -> ...
-  "jhy": { name: "Factory", path: "jhy", stats: "0/0/0/9/9/9/9/6" },
+  "jhy": { name: "Factory", path: "jhy", stats: "0/3/5/8/8/8/7/3" },
 
   // --- Pounder Branch (K) ---
   // Pounder(K) -> Destroyer(Y) -> ...
-  "kyy": { name: "Conqueror", path: "kyy", stats: "0/0/0/9/9/9/9/6" },
-  "kyu": { name: "Annihilator", path: "kyu", stats: "0/0/0/9/9/9/9/6" },
-  "kyi": { name: "Hybrid", path: "kyi", stats: "0/0/0/9/9/9/9/6" },
-  "kyh": { name: "Constructor", path: "kyh", stats: "0/0/0/9/9/9/9/6" },
+  "kyy": { name: "Conqueror", path: "kyy", stats: "0/3/2/8/8/9/9/3" },
+  "kyu": { name: "Annihilator", path: "kyu", stats: "0/6/9/9/9/9" },
+  "kyi": { name: "Hybrid", path: "kyi", stats: "0/3/5/8/8/8/7/3" },
+  "kyh": { name: "Constructor", path: "kyh", stats: "0/3/2/8/8/9/9/3" },
   // Pounder(K) -> Builder(U) -> ...
-  "kuy": { name: "Constructor", path: "kuy", stats: "0/0/0/9/9/9/9/6" },
-  "kuu": { name: "Auto-Builder", path: "kuu", stats: "0/0/0/9/9/9/9/6" },
-  "kui": { name: "Engineer", path: "kui", stats: "0/0/0/9/9/9/9/6" },
-  "kuh": { name: "Boomer", path: "kuh", stats: "0/0/0/9/9/9/9/6" },
+  "kuy": { name: "Constructor", path: "kuy", stats: "0/3/2/8/8/9/9/3" },
+  "kuu": { name: "Auto-Builder", path: "kuu", stats: "0/3/2/8/8/9/9/3" },
+  "kui": { name: "Engineer", path: "kui", stats: "0/3/2/8/8/9/9/3" },
+  "kuh": { name: "Boomer", path: "kuh", stats: "0/3/2/8/8/9/9/3" },
   // Pounder(K) -> Artillery(I) -> ...
   "kiy": { name: "Mortar", path: "kiy", stats: "0/0/0/9/9/9/9/6" },
   "kiu": { name: "Spreadshot", path: "kiu", stats: "0/0/0/9/9/9/9/6" },
-  "kii": { name: "Skimmer", path: "kii", stats: "0/0/0/9/9/9/9/6" }
+  "kii": { name: "Skimmer", path: "kii", stats: "0/3/5/8/8/8/7/3" }
 
     };
 
@@ -1005,12 +1005,12 @@
         simulateKey("KeyM", "m", true);
         await delay(10);
 
-        for (var si = 0; si < upgrade.stats.length; si++) {
-            var statNum = upgrade.stats[si];
-            if (statNum !== "0") {
-                for (var s = 0; s < parseInt(statNum); s++) {
-                    await tapKey("Digit" + ((si % 8) + 1), ""); await delay(10);
-                }
+        var statParts = upgrade.stats.split("/");
+        for (var si = 0; si < statParts.length; si++) {
+            var statNum = parseInt(statParts[si]) || 0;
+            var digitKey = ((si % 8) + 1);
+            for (var s = 0; s < statNum; s++) {
+                await tapKey("Digit" + digitKey, ""); await delay(10);
             }
         }
 
