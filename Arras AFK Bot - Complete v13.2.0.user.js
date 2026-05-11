@@ -1135,28 +1135,29 @@
         console.log("[AFK Bot] Running build for: " + upgrade.name);
 
         // Upgrade to tank using the path (keys are queued by the game)
+        // Generous delays between keys to avoid the game missing inputs
         for (var pi = 0; pi < upgrade.path.length; pi++) {
             var pathKey = upgrade.path[pi].toUpperCase();
-            await tapKey("Key" + pathKey, pathKey.toLowerCase()); await delay(30);
+            await tapKey("Key" + pathKey, pathKey.toLowerCase()); await delay(150);
         }
 
         // Apply stat distribution
-        await delay(20);
+        await delay(300);
         simulateKey("KeyM", "m", true);
-        await delay(10);
+        await delay(100);
 
         var statParts = upgrade.stats.split("/");
         for (var si = 0; si < statParts.length; si++) {
             var statNum = parseInt(statParts[si]) || 0;
             var digitKey = ((si % 8) + 1);
             for (var s = 0; s < statNum; s++) {
-                await tapKey("Digit" + digitKey, ""); await delay(10);
+                await tapKey("Digit" + digitKey, ""); await delay(40);
             }
         }
 
         simulateKey("KeyM", "m", false);
 
-        await delay(20);
+        await delay(100);
 
         buildSequenceRunning = false;
         if (movementEnabled) {
