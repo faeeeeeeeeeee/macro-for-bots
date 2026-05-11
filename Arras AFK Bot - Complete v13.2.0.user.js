@@ -373,8 +373,10 @@
                 console.log("[AFK Bot] Play detected. Waiting 3 seconds for game to load...");
                 await delay(3000);
                 pressEnter();
+                await delay(200);
                 await tapKey("KeyL", "l");
-                await delay(50);
+                await delay(200);
+                runBuildSequence();
             })();
         }
 
@@ -845,11 +847,8 @@
             bubbles: true, cancelable: true
         });
         document.dispatchEvent(ev2);
-
-        // Run build sequence after a delay
-        setTimeout(function() {
-            runBuildSequence();
-        }, 100);
+        // NOTE: build sequence is NOT called here — it's called separately
+        // by the play detection and death handler to avoid double execution.
     }
 
     // =========================================================================
@@ -885,6 +884,9 @@
     //   Currently set to "huu" (Booster).
     // =========================================================================
     var tankUpgrades = {
+  // --- No Upgrade (stay as Basic tank) ---
+  "none": { name: "None (Stay Basic)", path: "", stats: "0/0/0/0/0/0/0/0", branch: "No Upgrade" },
+
   // --- Twin Branch (Y) ---
   // Twin(Y) -> Double Twin(Y): Triple Twin, Hewn Double, Auto-Double, Bent Double
   "yyy": { name: "Triple Twin", path: "yyy", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
@@ -1107,7 +1109,7 @@
             setTimeout(function() {
                 respawnCount++;
                 setStatus("Running build sequence...");
-                runBuildSequence();
+                runBuildSequence(); // Only build call — pressEnter no longer triggers one
             }, 1000);
             setTimeout(function() { isDead = false; }, 500);
         }
@@ -1132,8 +1134,7 @@
 
         console.log("[AFK Bot] Running build for: " + upgrade.name);
 
-        // Upgrade to tank using the path
-        await tapKey("KeyE", "e"); await delay(50);
+        // Upgrade to tank using the path (keys are queued by the game)
         for (var pi = 0; pi < upgrade.path.length; pi++) {
             var pathKey = upgrade.path[pi].toUpperCase();
             await tapKey("Key" + pathKey, pathKey.toLowerCase()); await delay(30);
