@@ -783,79 +783,119 @@
     // =========================================================================
     var tankUpgrades = {
   // --- Twin Branch (Y) ---
+  // Twin(Y) -> Double Twin(Y): Triple Twin, Hewn Double, Auto-Double, Bent Double
   "yyy": { name: "Triple Twin", path: "yyy", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yyu": { name: "Hewn Double", path: "yyu", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yyi": { name: "Auto-Double", path: "yyi", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yyh": { name: "Bent Double", path: "yyh", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
+  // Twin(Y) -> Triple Shot(U): Penta Shot, Spreadshot, Bent Hybrid, Bent Double, Triplet
   "yuy": { name: "Penta Shot", path: "yuy", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yuu": { name: "Spreadshot", path: "yuu", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yui": { name: "Bent Hybrid", path: "yui", stats: "0/3/5/8/8/8/7/3", branch: "Twin (Y)" },
   "yuj": { name: "Triplet", path: "yuj", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
+  // Twin(Y) -> Gunner(I): Auto-Gunner, Nailgun, Auto-4, Machine Gunner, Gunner Trapper, Cyclone, Overgunner
   "yiy": { name: "Auto-Gunner", path: "yiy", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yiu": { name: "Nailgun", path: "yiu", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yii": { name: "Auto-4 (Twin)", path: "yii", stats: "0/3/5/8/8/8/7/3", branch: "Twin (Y)" },
   "yih": { name: "Machine Gunner", path: "yih", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
   "yij": { name: "Gunner Trapper", path: "yij", stats: "0/3/2/8/8/9/9/3", branch: "Twin (Y)" },
   "yik": { name: "Cyclone (Twin)", path: "yik", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
+  // Twin(Y) -> Hexa Tank(H): Octo Tank, Cyclone, Hexa-Trapper
+  "yhy": { name: "Octo Tank (Twin)", path: "yhy", stats: "0/0/0/9/9/9/9/6", branch: "Twin (Y)" },
 
   // --- Sniper Branch (U) ---
-  "uyy": { name: "Falcon (Sniper)", path: "uyy", stats: "0/5/0/7/7/9/7/7", branch: "Sniper (U)" },
-  "uyu": { name: "Ranger", path: "uyu", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  // Sniper(U) -> Assassin(Y): Ranger, Falcon, Stalker, Auto-Assassin
+  "uyy": { name: "Ranger", path: "uyy", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  "uyu": { name: "Falcon (Sniper)", path: "uyu", stats: "0/5/0/7/7/9/7/7", branch: "Sniper (U)" },
   "uyi": { name: "Stalker", path: "uyi", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
   "uyh": { name: "Auto-Assassin", path: "uyh", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  // Sniper(U) -> Hunter(U): Predator, Poacher, Ordnance, Dual
   "uuy": { name: "Predator", path: "uuy", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
   "uuu": { name: "Poacher", path: "uuu", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
-  "uui": { name: "Sidewinder", path: "uui", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  "uui": { name: "Ordnance", path: "uui", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  // Sniper(U) -> Minigun(I): Streamliner, Crop Duster, Barricade, Nailgun
   "uiy": { name: "Streamliner", path: "uiy", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
-  "uiu": { name: "Nailgun (Sniper)", path: "uiu", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  "uiu": { name: "Crop Duster", path: "uiu", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  "uii": { name: "Barricade", path: "uii", stats: "0/3/2/8/8/9/9/3", branch: "Sniper (U)" },
+  "uih": { name: "Nailgun (Sniper)", path: "uih", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  // Sniper(U) -> Rifle(H): Musket, Crossbow, Armsman
   "uhy": { name: "Musket", path: "uhy", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  "uhu": { name: "Crossbow", path: "uhu", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
+  "uhi": { name: "Armsman", path: "uhi", stats: "0/0/0/9/9/9/9/6", branch: "Sniper (U)" },
 
   // --- Machine Gun Branch (I) ---
-  "iyy": { name: "Mortar", path: "iyy", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
-  "iyu": { name: "Spreadshot (MG)", path: "iyu", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
-  "iyi": { name: "Skimmer", path: "iyi", stats: "0/3/5/8/8/8/7/3", branch: "Machine Gun (I)" },
-  "iuy": { name: "Streamliner (MG)", path: "iuy", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
-  "iiy": { name: "Auto-Gunner (MG)", path: "iiy", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
+  // Machine Gun(I) -> Gunner(Y): Auto-Gunner, Nailgun, Auto-4, Machine Gunner, Gunner Trapper, Cyclone, Overgunner
+  "iyy": { name: "Auto-Gunner (MG)", path: "iyy", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
+  "iyu": { name: "Nailgun (MG)", path: "iyu", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
+  // Machine Gun(I) -> Artillery(U): Mortar, Ordnance, Beekeeper
+  "iuy": { name: "Mortar", path: "iuy", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
+  "iuu": { name: "Ordnance (MG)", path: "iuu", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
+  "iui": { name: "Beekeeper", path: "iui", stats: "0/3/5/8/8/8/7/3", branch: "Machine Gun (I)" },
+  // Machine Gun(I) -> Minigun(I): Streamliner, Nailgun, Crop Duster, Barricade
+  "iiy": { name: "Streamliner (MG)", path: "iiy", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
+  "iiu": { name: "Nailgun (MG Mini)", path: "iiu", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
+  "iii": { name: "Crop Duster (MG)", path: "iii", stats: "0/0/0/9/9/9/9/6", branch: "Machine Gun (I)" },
 
   // --- Flank Guard Branch (H) ---
+  // Flank Guard(H) -> Hexa Tank(Y): Octo Tank, Cyclone, Hexa-Trapper
   "hyy": { name: "Octo Tank", path: "hyy", stats: "0/0/0/9/9/9/9/6", branch: "Flank Guard (H)" },
   "hyu": { name: "Cyclone", path: "hyu", stats: "0/0/0/9/9/9/9/6", branch: "Flank Guard (H)" },
+  "hyi": { name: "Hexa-Trapper", path: "hyi", stats: "0/3/2/8/8/9/9/3", branch: "Flank Guard (H)" },
+  // Flank Guard(H) -> Tri-Angle(U): Fighter, Booster, Bomber, Auto-Tri-Angle, Surfer, Falcon, Eagle
   "huy": { name: "Fighter", path: "huy", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
   "huu": { name: "Booster", path: "huu", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
-  "hui": { name: "Falcon", path: "hui", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
-  "huh": { name: "Bomber", path: "huh", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
-  "huj": { name: "Auto-Tri-Angle", path: "huj", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
+  "hui": { name: "Bomber", path: "hui", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
+  "huh": { name: "Auto-Tri-Angle", path: "huh", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
+  "huj": { name: "Surfer", path: "huj", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
+  "huk": { name: "Falcon", path: "huk", stats: "0/5/0/7/7/9/7/7", branch: "Flank Guard (H)" },
+  // Flank Guard(H) -> Auto-3(I): Auto-5, Mega-3, Auto-4, Banshee
   "hiy": { name: "Auto-5", path: "hiy", stats: "0/3/5/8/8/8/7/3", branch: "Flank Guard (H)" },
   "hiu": { name: "Mega-3", path: "hiu", stats: "0/3/5/8/8/8/7/3", branch: "Flank Guard (H)" },
   "hii": { name: "Auto-4", path: "hii", stats: "0/3/5/8/8/8/7/3", branch: "Flank Guard (H)" },
   "hih": { name: "Banshee", path: "hih", stats: "0/3/5/8/8/8/7/3", branch: "Flank Guard (H)" },
+  // Flank Guard(H) -> Trap Guard(H): Gunner Trapper, Bushwhacker, Bomber, Conqueror, Bulwark
+  "hhy": { name: "Gunner Trapper (Flank)", path: "hhy", stats: "0/3/2/8/8/9/9/3", branch: "Flank Guard (H)" },
+  "hhu": { name: "Bushwhacker", path: "hhu", stats: "0/3/2/8/8/9/9/3", branch: "Flank Guard (H)" },
+  // Flank Guard(H) -> Tri-Trapper(J): Septa-Trapper, Hexa-Trapper, Fortress, Architect
+  "hjy": { name: "Septa-Trapper", path: "hjy", stats: "0/3/2/8/8/9/9/3", branch: "Flank Guard (H)" },
+  "hju": { name: "Hexa-Trapper (Flank)", path: "hju", stats: "0/3/2/8/8/9/9/3", branch: "Flank Guard (H)" },
+  "hji": { name: "Fortress (Flank)", path: "hji", stats: "0/3/2/8/8/9/9/3", branch: "Flank Guard (H)" },
+  "hjh": { name: "Architect", path: "hjh", stats: "0/3/2/8/8/9/9/3", branch: "Flank Guard (H)" },
 
   // --- Director Branch (J) ---
+  // Director(J) -> Overseer(Y): Overlord, Overtrapper, Overdrive, Auto-Overseer, Overgunner, Banshee, Commander
   "jyy": { name: "Overlord", path: "jyy", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
   "jyu": { name: "Overtrapper", path: "jyu", stats: "0/3/5/8/8/9/6/3", branch: "Director (J)" },
-  "jyi": { name: "Overgunner", path: "jyi", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
-  "jyh": { name: "Banshee (Director)", path: "jyh", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
-  "jyj": { name: "Auto-Overseer", path: "jyj", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
-  "jyk": { name: "Overdrive", path: "jyk", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
-  "juy": { name: "Carrier", path: "juy", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
-  "juu": { name: "Battleship", path: "juu", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
-  "jui": { name: "Fortress", path: "jui", stats: "0/3/2/8/8/9/9/3", branch: "Director (J)" },
+  "jyi": { name: "Overdrive", path: "jyi", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  "jyh": { name: "Auto-Overseer", path: "jyh", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  "jyj": { name: "Overgunner", path: "jyj", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  "jyk": { name: "Banshee (Director)", path: "jyk", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  // Director(J) -> Cruiser(U): Battleship, Fortress, Carrier, Auto-Cruiser, Commander
+  "juy": { name: "Battleship", path: "juy", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  "juu": { name: "Fortress (Director)", path: "juu", stats: "0/3/2/8/8/9/9/3", branch: "Director (J)" },
+  "jui": { name: "Carrier", path: "jui", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  "juh": { name: "Auto-Cruiser", path: "juh", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  // Director(J) -> Underseer(I): Necromancer, Maleficitor
   "jiy": { name: "Necromancer", path: "jiy", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
   "jiu": { name: "Maleficitor", path: "jiu", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
+  // Director(J) -> Spawner(H): Factory, Auto-Spawner
   "jhy": { name: "Factory", path: "jhy", stats: "0/3/5/8/8/8/7/3", branch: "Director (J)" },
 
   // --- Pounder Branch (K) ---
+  // Pounder(K) -> Destroyer(Y): Conqueror, Annihilator, Hybrid, Constructor
   "kyy": { name: "Conqueror", path: "kyy", stats: "0/3/2/8/8/9/9/3", branch: "Pounder (K)" },
   "kyu": { name: "Annihilator", path: "kyu", stats: "0/6/9/9/9/9", branch: "Pounder (K)" },
   "kyi": { name: "Hybrid", path: "kyi", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" },
   "kyh": { name: "Constructor (Destroyer)", path: "kyh", stats: "0/3/2/8/8/9/9/3", branch: "Pounder (K)" },
+  // Pounder(K) -> Builder(U): Constructor, Auto-Builder, Engineer, Boomer, Architect, Conqueror
   "kuy": { name: "Constructor (Builder)", path: "kuy", stats: "0/3/2/8/8/9/9/3", branch: "Pounder (K)" },
   "kuu": { name: "Auto-Builder", path: "kuu", stats: "0/3/2/8/8/9/9/3", branch: "Pounder (K)" },
   "kui": { name: "Engineer", path: "kui", stats: "0/3/2/8/8/9/9/3", branch: "Pounder (K)" },
   "kuh": { name: "Boomer", path: "kuh", stats: "0/3/2/8/8/9/9/3", branch: "Pounder (K)" },
+  // Pounder(K) -> Artillery(I): Mortar, Ordnance, Beekeeper
   "kiy": { name: "Mortar (Pounder)", path: "kiy", stats: "0/0/0/9/9/9/9/6", branch: "Pounder (K)" },
-  "kiu": { name: "Spreadshot (Pounder)", path: "kiu", stats: "0/0/0/9/9/9/9/6", branch: "Pounder (K)" },
-  "kii": { name: "Skimmer (Pounder)", path: "kii", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" }
+  "kiu": { name: "Ordnance (Pounder)", path: "kiu", stats: "0/0/0/9/9/9/9/6", branch: "Pounder (K)" },
+  "kii": { name: "Beekeeper (Pounder)", path: "kii", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" }
 
     };
 
