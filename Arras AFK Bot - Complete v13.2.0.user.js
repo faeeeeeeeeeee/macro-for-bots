@@ -1111,7 +1111,8 @@
                 setStatus("Running build sequence...");
                 runBuildSequence(); // Only build call — pressEnter no longer triggers one
             }, 1000);
-            setTimeout(function() { isDead = false; }, 500);
+            // isDead stays true until build sequence completes (set false in runBuildSequence)
+            // Old value of 500ms caused re-detection of "respawn" text before build finished
         }
     }
 
@@ -1160,6 +1161,7 @@
         await delay(100);
 
         buildSequenceRunning = false;
+        isDead = false; // Safe to reset now — build is done, won't re-trigger death handler
         if (movementEnabled) {
             setStatus(isLeader ? "LEADER — alts follow me" : "Moving");
         } else {
