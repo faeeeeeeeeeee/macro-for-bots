@@ -11,6 +11,9 @@
 (function () {
     "use strict";
 
+    // Are we running inside an iframe bot? If so, skip iframe-spawning features.
+    var isInsideIframe = (window !== window.top);
+
     // ╔═══════════════════════════════════════════════════════════════════════╗
     // ║                    TABLE OF CONTENTS / QUICK FIND                   ║
     // ║                                                                     ║
@@ -73,7 +76,9 @@
     // Creates bot instances as iframes instead of separate browser windows.
     // Each bot runs the same script in a sub-tab within the page.
     // Functions: createBotIframe(), removeBotInstance(), saveBotState()
+    // Only runs in the TOP window — iframes skip this entire block.
     // =========================================================================
+    if (!isInsideIframe) {
     var botIframes = document.createElement("div");
     botIframes.id = "botIframes";
     botIframes.style.position = "fixed";
@@ -289,6 +294,7 @@
 
     window.createBotIframe = createBotIframe;
     window.removeBotInstance = removeBotInstance;
+    } // end if (!isInsideIframe)
 
     // =========================================================================
     // [SECTION: COORD-DETECT] Canvas Text Coordinate Detection
@@ -1192,9 +1198,11 @@
         var rect = canvas.getBoundingClientRect();
         var cx = rect.left + rect.width / 2;
         var cy = rect.top  + rect.height / 2;
+        // Scale aim distance to canvas size so it works in small iframes too
+        var aimDist = Math.min(AIM_DISTANCE, Math.min(rect.width, rect.height) * 0.4);
         var len = Math.hypot(dx, dy) || 1;
-        targetMouseX = cx + (dx / len) * AIM_DISTANCE;
-        targetMouseY = cy + (dy / len) * AIM_DISTANCE;
+        targetMouseX = cx + (dx / len) * aimDist;
+        targetMouseY = cy + (dy / len) * aimDist;
     }
 
     // =========================================================================
@@ -1515,12 +1523,15 @@
             '  </div>',
             '</div>',
             '',
+            // Bot Iframes section - only shown in top window (not inside iframes)
+            (isInsideIframe ? '' : [
             '<div class="section">',
             '  <h3>Bot Iframes</h3>',
             '  <p><button id="btn-create-iframe" class="btn btn-summon">+ Create Bot Tab</button></p>',
             '  <p style="font-size:12px;color:#888;">Bots persist after reload!<br/>Click ✕ on bot frame to close</p>',
             '  <div id="bot-list" style="margin-top:8px;max-height:120px;overflow-y:auto;"></div>',
             '</div>',
+            ].join('\n')),
             '',
             '<div class="section">',
             '  <h3>Roaming Control</h3>',
@@ -1589,11 +1600,13 @@
             updateGUI();
         });
 
-        // Bot iframe button
-        document.getElementById("btn-create-iframe").addEventListener("click", function() {
-            window.createBotIframe();
-            setStatus("Created bot iframe");
-        });
+        // Bot iframe button (only in top window)
+        if (!isInsideIframe) {
+            document.getElementById("btn-create-iframe").addEventListener("click", function() {
+                window.createBotIframe();
+                setStatus("Created bot iframe");
+            });
+        }
 
         // Tank selection dropdown
         var tankSelect = document.getElementById("tank-select");
@@ -1811,23 +1824,24 @@
         updateGUI();
         lastCanvasActivity = Date.now();
 
-        // Restore bot instances from localStorage
-        try {
-            var savedBots = localStorage.getItem("arras-afk-bots");
-            if (savedBots) {
-                var botData = JSON.parse(savedBots);
-                for (var i = 0; i < botData.length; i++) {
-                    var bot = createBotIframe();
-                    // Restore size if available
-                    if (botData[i].width && botData[i].height) {
-                        bot.container.style.width = botData[i].width + "px";
-                        bot.container.style.height = botData[i].height + "px";
+        // Restore bot instances from localStorage (only in top window)
+        if (!isInsideIframe) {
+            try {
+                var savedBots = localStorage.getItem("arras-afk-bots");
+                if (savedBots) {
+                    var botData = JSON.parse(savedBots);
+                    for (var i = 0; i < botData.length; i++) {
+                        var bot = createBotIframe();
+                        if (botData[i].width && botData[i].height) {
+                            bot.container.style.width = botData[i].width + "px";
+                            bot.container.style.height = botData[i].height + "px";
+                        }
                     }
+                    console.log("[AFK Bot] Restored " + botData.length + " bot instances");
                 }
-                console.log("[AFK Bot] Restored " + botData.length + " bot instances");
+            } catch(e) {
+                console.log("[AFK Bot] Could not restore bots:", e);
             }
-        } catch(e) {
-            console.log("[AFK Bot] Could not restore bots:", e);
         }
 
         // Main movement loop
