@@ -348,6 +348,7 @@
     }
 
     var lastCoordText = "";
+    var playDetected = false; // Guard flag to prevent double Enter/L press
 
     function onCanvasText(text, x, y, ctx) {
         if (typeof text !== 'string') return;
@@ -359,7 +360,9 @@
         var lowerText = text.toLowerCase().trim();
 
         // Detect "PLAY" button - game reloaded successfully
-        if (lowerText === "play") {
+        // Guard: only fire once per play screen (reset when we get coords back)
+        if (lowerText === "play" && !playDetected) {
+            playDetected = true;
             (async () => {
                 console.log("[AFK Bot] Play detected. Waiting 3 seconds for game to load...");
                 await delay(3000);
@@ -405,10 +408,11 @@
             if (typeof checkSummonArrival === 'function') checkSummonArrival();
             if (typeof throttledBroadcast === 'function') throttledBroadcast();
 
-            // Reset disconnect flags when we have valid coords (we're in game)
-            if (reconnectDetected || disconnectDetected) {
+            // Reset flags when we have valid coords (we're in game)
+            if (reconnectDetected || disconnectDetected || playDetected) {
                 reconnectDetected = false;
                 disconnectDetected = false;
+                playDetected = false;
                 console.log("[AFK Bot] Back in game - connection restored");
             }
         }
