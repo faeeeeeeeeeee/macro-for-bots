@@ -895,7 +895,13 @@
   // Pounder(K) -> Artillery(I): Mortar, Ordnance, Beekeeper
   "kiy": { name: "Mortar (Pounder)", path: "kiy", stats: "0/0/0/9/9/9/9/6", branch: "Pounder (K)" },
   "kiu": { name: "Ordnance (Pounder)", path: "kiu", stats: "0/0/0/9/9/9/9/6", branch: "Pounder (K)" },
-  "kii": { name: "Beekeeper (Pounder)", path: "kii", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" }
+  "kii": { name: "Beekeeper (Pounder)", path: "kii", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" },
+  // Pounder(K) -> Launcher(H): Skimmer, Twister, Swarmer, Sidewinder, Field Gun
+  "khy": { name: "Skimmer", path: "khy", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" },
+  "khu": { name: "Twister", path: "khu", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" },
+  "khi": { name: "Swarmer", path: "khi", stats: "0/3/5/8/8/8/7/3", branch: "Pounder (K)" },
+  "khh": { name: "Sidewinder", path: "khh", stats: "0/0/0/9/9/9/9/6", branch: "Pounder (K)" },
+  "khj": { name: "Field Gun", path: "khj", stats: "0/0/0/9/9/9/9/6", branch: "Pounder (K)" }
 
     };
 
