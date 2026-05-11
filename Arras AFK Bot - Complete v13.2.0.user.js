@@ -11,8 +11,68 @@
 (function () {
     "use strict";
 
+    // ╔═══════════════════════════════════════════════════════════════════════╗
+    // ║                    TABLE OF CONTENTS / QUICK FIND                   ║
+    // ║                                                                     ║
+    // ║  Search for these tags to jump to each section:                      ║
+    // ║                                                                     ║
+    // ║  [SECTION: IFRAME-BOTS]    - Iframe bot system (spawn sub-tabs)     ║
+    // ║  [SECTION: COORD-DETECT]   - Canvas text coordinate detection       ║
+    // ║  [SECTION: WEBSOCKET]      - WebSocket hook (intercepts game conn)  ║
+    // ║  [SECTION: BROADCAST]      - BroadcastChannel & tab communication   ║
+    // ║  [SECTION: VISIBILITY]     - Page visibility override (stay active) ║
+    // ║  [SECTION: KEY-INTERCEPT]  - Keyboard event interception            ║
+    // ║  [SECTION: MOUSE-INTERCEPT]- Mouse event interception               ║
+    // ║  [SECTION: INPUT-HELPERS]  - Key simulation & mouse aim helpers     ║
+    // ║  [SECTION: ENTER-HELPER]   - Press Enter helper (join/respawn)      ║
+    // ║  [SECTION: STATE]          - Bot state variables                    ║
+    // ║  [SECTION: TANK-UPGRADES]  - Tank upgrade paths & stat builds       ║
+    // ║  [SECTION: MOVEMENT-CFG]   - Movement config (roam, summon, etc.)   ║
+    // ║  [SECTION: DEATH-DETECT]   - Death detection & auto-respawn         ║
+    // ║  [SECTION: BUILD-SEQ]      - Post-respawn build sequence            ║
+    // ║  [SECTION: MOVEMENT]       - Movement directions & fluid movement   ║
+    // ║  [SECTION: WALL-DETECT]    - Wall detection & avoidance             ║
+    // ║  [SECTION: GUI-HTML]       - GUI panel HTML & CSS                   ║
+    // ║  [SECTION: GUI-WIRING]     - GUI event wiring (buttons, toggles)    ║
+    // ║  [SECTION: GUI-UPDATES]    - Panel update functions                 ║
+    // ║  [SECTION: GUI-HELPERS]    - GUI helper functions                   ║
+    // ║  [SECTION: HOTKEYS]        - Keyboard hotkeys (ESC, [, ])           ║
+    // ║  [SECTION: BOOT]           - Boot / initialization                  ║
+    // ║                                                                     ║
+    // ║  QUICK EDIT GUIDE:                                                  ║
+    // ║  - To change default tank: search "selectedTankUpgrade"             ║
+    // ║  - To add a new tank: add entry to tankUpgrades object              ║
+    // ║  - To change a stat build: edit the "stats" field (format below)    ║
+    // ║  - To change hotkeys: search [SECTION: HOTKEYS]                     ║
+    // ║  - To change movement speed/timing: search [SECTION: MOVEMENT-CFG]  ║
+    // ║  - To change GUI appearance: search [SECTION: GUI-HTML]             ║
+    // ║                                                                     ║
+    // ║  STAT FORMAT: "a/b/c/d/e/f/g/h"                                    ║
+    // ║    a = Health Regen    (key 1)                                      ║
+    // ║    b = Max Health      (key 2)                                      ║
+    // ║    c = Body Damage     (key 3)                                      ║
+    // ║    d = Bullet Speed    (key 4)                                      ║
+    // ║    e = Bullet Penetration (key 5)                                   ║
+    // ║    f = Bullet Damage   (key 6)                                      ║
+    // ║    g = Reload          (key 7)                                      ║
+    // ║    h = Movement Speed  (key 8)                                      ║
+    // ║  M key maxes out the current stat being upgraded                    ║
+    // ║                                                                     ║
+    // ║  UPGRADE PATH FORMAT: "abc" where each letter = upgrade key:        ║
+    // ║    Y = 1st option, U = 2nd, I = 3rd, H = 4th, J = 5th, K = 6th    ║
+    // ║    1st letter = Tier 2 choice, 2nd = Tier 3, 3rd = Tier 4          ║
+    // ║    Example: "huu" = Flank Guard(H) -> Tri-Angle(U) -> Booster(U)   ║
+    // ║                                                                     ║
+    // ║  TIER 2 TANKS (from Basic):                                         ║
+    // ║    Y = Twin, U = Sniper, I = Machine Gun,                           ║
+    // ║    H = Flank Guard, J = Director, K = Pounder                       ║
+    // ╚═══════════════════════════════════════════════════════════════════════╝
+
     // =========================================================================
-    // IFRAME BOT SYSTEM (for opening sub-tabs instead of separate windows)
+    // [SECTION: IFRAME-BOTS] Iframe Bot System
+    // Creates bot instances as iframes instead of separate browser windows.
+    // Each bot runs the same script in a sub-tab within the page.
+    // Functions: createBotIframe(), removeBotInstance(), saveBotState()
     // =========================================================================
     var botIframes = document.createElement("div");
     botIframes.id = "botIframes";
@@ -231,7 +291,11 @@
     window.removeBotInstance = removeBotInstance;
 
     // =========================================================================
-    // -2. CANVAS TEXT COORDINATE DETECTION (reliable coordinate extraction)
+    // [SECTION: COORD-DETECT] Canvas Text Coordinate Detection
+    // Hooks into CanvasRenderingContext2D to intercept text drawn on screen.
+    // Reads coordinates from the game's coordinate display text.
+    // Also detects "play" and "disconnect" states for auto-reconnect.
+    // Key variables: detectedCoords, grid, coordDetectionDone
     // =========================================================================
     var detectedCoords = { x: 0, y: 0, hasData: false, rawText: "Searching..." };
     var coordUpdateCount = 0;
@@ -385,7 +449,10 @@
     }, 500);
 
     // =========================================================================
-    // -1. WEBSOCKET HOOK
+    // [SECTION: WEBSOCKET] WebSocket Hook
+    // Intercepts the game's WebSocket connection to monitor message count
+    // and detect disconnections. The original WebSocket is wrapped.
+    // Key variables: gameWebSocket, wsMsgCount
     // =========================================================================
     var gameWebSocket = null;
     var wsMsgCount = 0;
@@ -421,7 +488,12 @@
     }
 
     // =========================================================================
-    // -0. BROADCASTCHANNEL & TAB ID
+    // [SECTION: BROADCAST] BroadcastChannel & Tab Communication
+    // Allows multiple tabs/bots to communicate positions and commands.
+    // Enables leader/follower mode where alt tabs follow the leader.
+    // Key variables: altTabs, myTabId, isLeader, followLeader, botChannel
+    // Functions: broadcastPosition(), claimLeader(), resignLeader(),
+    //           autoFollowLeader(), getLeaderTab(), getAltCount()
     // =========================================================================
     var altTabs = {};
     var myTabId = Math.random().toString(36).substr(2, 8);
@@ -590,7 +662,10 @@
     }
 
     // =========================================================================
-    // 0. PAGE VISIBILITY OVERRIDE
+    // [SECTION: VISIBILITY] Page Visibility Override
+    // Prevents the browser from throttling the tab when it's not focused.
+    // Makes document.hidden always return false and blocks visibilitychange.
+    // Also blocks beforeunload to prevent "are you sure?" popups.
     // =========================================================================
     Object.defineProperty(document, 'hidden', {
         get: function() { return false; },
@@ -619,7 +694,9 @@
     };
 
     // =========================================================================
-    // 1. INTERCEPT window.addEventListener (keyboard)
+    // [SECTION: KEY-INTERCEPT] Keyboard Event Interception
+    // Wraps keyboard event handlers so the game accepts simulated keypresses.
+    // Makes isTrusted always appear true on key events.
     // =========================================================================
     var _origWindowAddEventListener = window.addEventListener;
     window.addEventListener = function() {
@@ -643,7 +720,9 @@
     };
 
     // =========================================================================
-    // 2. INTERCEPT HTMLDivElement.prototype.addEventListener (mouse)
+    // [SECTION: MOUSE-INTERCEPT] Mouse Event Interception
+    // Wraps mouse event handlers so the game accepts simulated mouse moves.
+    // Makes isTrusted always appear true on mouse events.
     // =========================================================================
     var _origDivAddEventListener = HTMLDivElement.prototype.addEventListener;
     HTMLDivElement.prototype.addEventListener = function() {
@@ -735,7 +814,9 @@
     }
 
     // =========================================================================
-    // 5. PRESS ENTER HELPER
+    // [SECTION: ENTER-HELPER] Press Enter Helper
+    // Simulates pressing Enter to join game / respawn after death.
+    // Also triggers the build sequence after a short delay.
     // =========================================================================
     function pressEnter() {
         if (document.activeElement && document.activeElement.tagName === "INPUT") {
@@ -762,7 +843,12 @@
     }
 
     // =========================================================================
-    // 4. STATE
+    // [SECTION: STATE] Bot State Variables
+    // - movementEnabled: whether the bot is actively moving (toggle with [)
+    // - autoRespawnEnabled: whether bot auto-respawns on death (toggle with ])
+    // - isDead: true briefly during death/respawn cycle
+    // - buildSequenceRunning: true while upgrading tank after spawn
+    // - deathCount / respawnCount: lifetime stats
     // =========================================================================
     var movementEnabled = true;
     var autoRespawnEnabled = true;
@@ -779,7 +865,14 @@
     }
 
     // =========================================================================
-    // 4b. TANK UPGRADE PATHS
+    // [SECTION: TANK-UPGRADES] Tank Upgrade Paths & Stat Builds
+    //
+    // HOW TO ADD/EDIT A TANK:
+    //   "path": { name: "Display Name", path: "path", stats: "a/b/c/d/e/f/g/h", branch: "Branch Name" }
+    //
+    // HOW TO CHANGE DEFAULT TANK:
+    //   Search for "selectedTankUpgrade" below and change the path string.
+    //   Currently set to "huu" (Booster).
     // =========================================================================
     var tankUpgrades = {
   // --- Twin Branch (Y) ---
@@ -908,7 +1001,18 @@
     var selectedTankUpgrade = "huu"; // Default to Booster
 
     // =========================================================================
-    // 4c. MOVEMENT CONFIG
+    // [SECTION: MOVEMENT-CFG] Movement Configuration
+    //
+    // ROAMING SETTINGS:
+    //   CENTER_BIAS_STRENGTH  - How strongly bot drifts toward map center (0 = none)
+    //   ROAM_BIAS_MULTIPLIER  - Roam radius multiplier (adjustable via GUI slider)
+    //   ROAM_RADIUS_MIN       - Min distance from roam center before turning back
+    //   ROAM_RADIUS_MAX       - Max distance before forced return
+    //   LEADER_SAFE_DISTANCE  - Min distance followers keep from leader
+    //
+    // DIRECTION TIMING:
+    //   DIRECTION_HOLD_TIME_MIN/MAX - How long (ms) bot holds one direction
+    //   DIRECTION_CHANGE_CHANCE     - Random chance to switch direction each tick
     // =========================================================================
     var CENTER_BIAS_STRENGTH = 0.;
     var ROAM_BIAS_MULTIPLIER = 0.3;
@@ -947,7 +1051,10 @@
     }
 
     // =========================================================================
-    // 7. DEATH DETECTION
+    // [SECTION: DEATH-DETECT] Death Detection & Auto-Respawn
+    // Monitors canvas text for "respawn" to detect when tank has died.
+    // If autoRespawnEnabled is true, automatically presses Enter to respawn
+    // and triggers the build sequence to re-upgrade the tank.
     // =========================================================================
     function waitForProto(cb) {
         var check = function() {
@@ -997,7 +1104,9 @@
     }
 
     // =========================================================================
-    // 8. POST-RESPAWN BUILD SEQUENCE
+    // [SECTION: BUILD-SEQ] Post-Respawn Build Sequence
+    // Runs after spawning/respawning to upgrade to the selected tank.
+    // Steps: 1) Press E to open upgrades 2) Press path keys 3) Hold M + digit keys for stats
     // =========================================================================
     async function runBuildSequence() {
         buildSequenceRunning = true;
@@ -1047,7 +1156,10 @@
     }
 
     // =========================================================================
-    // 9. MOVEMENT DIRECTIONS
+    // [SECTION: MOVEMENT] Movement Directions & Fluid Movement Loop
+    // 8-direction movement using WASD keys. The bot picks a direction,
+    // holds it for a random time, then picks a new one.
+    // DIRECTIONS array maps key combos to direction vectors.
     // =========================================================================
     var DIRECTIONS = [
         { keys: ["KeyW"],          dx:  0, dy: -1, name: "N"  },
@@ -1082,7 +1194,9 @@
     }
 
     // =========================================================================
-    // 9b. SMART DIRECTION PICKER (Fluid + Wall-Aware)
+    // [SECTION: MOVEMENT-LOGIC] Smart Direction Picker (Fluid + Wall-Aware)
+    // pickBiasedDirection() - chooses best direction considering:
+    //   summon target, roam center, leader position, wall memory
     // =========================================================================
     function getTargetDirection() {
         var targetX = 0;
@@ -1203,7 +1317,9 @@
     }
 
     // =========================================================================
-    // 9c. WALL DETECTION & AVOIDANCE
+    // [SECTION: WALL-DETECT] Wall Detection & Avoidance
+    // Detects when bot is stuck by checking if position hasn't changed.
+    // Picks perpendicular direction to escape walls.
     // =========================================================================
     function checkForWall() {
         if (!currentDir || !coordDetectionDone || !movementEnabled || buildSequenceRunning) return;
@@ -1289,7 +1405,10 @@
     }
 
     // =========================================================================
-    // 11. GUI
+    // [SECTION: GUI-HTML] GUI Panel HTML & CSS
+    // The entire control panel UI. Opens with ESC key.
+    // To change colors/sizes: edit the CSS in style.textContent below.
+    // To add new controls: add HTML in the panel innerHTML section.
     // =========================================================================
     var menuOpen = false;
     var cpCanvas = null;
@@ -1536,7 +1655,8 @@
     }
 
     // =========================================================================
-    // 11b. PANEL UPDATES
+    // [SECTION: GUI-UPDATES] Panel Update Functions
+    // toggleMenu(), updateTankDisplay(), updatePanel()
     // =========================================================================
     function toggleMenu() {
         menuOpen = !menuOpen;
@@ -1610,7 +1730,8 @@
     }
 
     // =========================================================================
-    // 11c. GUI HELPERS
+    // [SECTION: GUI-HELPERS] GUI Helper Functions
+    // updateGUI() - updates indicator dot + label, updateStatusDisplay()
     // =========================================================================
     function updateGUI() {
         var dot = document.getElementById("ind-dot");
@@ -1645,7 +1766,9 @@
     }
 
     // =========================================================================
-    // 12. HOTKEYS
+    // [SECTION: HOTKEYS] Keyboard Hotkeys
+    // ESC = Open/close panel, [ = Toggle movement, ] = Toggle auto-respawn
+    // To add a new hotkey: add "if (e.code === ...)" block below
     // =========================================================================
     document.addEventListener("keydown", function(e) {
         if (e.code === "Escape") {
@@ -1676,7 +1799,8 @@
     }, true);
 
     // =========================================================================
-    // 13. BOOT
+    // [SECTION: BOOT] Boot / Initialization
+    // Starts all main loops: movement(50ms), mouse(16ms), status(500ms)
     // =========================================================================
     function boot() {
         buildGUI();
