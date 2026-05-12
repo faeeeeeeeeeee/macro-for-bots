@@ -1447,18 +1447,13 @@
         return phrases[Math.floor(Math.random() * phrases.length)];
     }
 
-    // Get AI response — tries Pollinations, stays silent if it fails (no forced fallback)
-    async function getAIResponse(prompt, fallbackCategory) {
+    // Get AI response — tries Pollinations, stays silent if it fails
+    async function getAIResponse(prompt) {
         var reply = await callPollinations(prompt);
         if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH) {
             return reply;
         }
-        // Don't always force a response — respond ~50% of the time if AI fails
-        if (Math.random() < 0.5) {
-            console.log("[AFK Bot] AI failed, using fallback phrase");
-            return getLocalPhrase(fallbackCategory || "respond");
-        }
-        console.log("[AFK Bot] AI failed, staying silent this time");
+        console.log("[AFK Bot] AI failed, staying silent");
         return null;
     }
 
@@ -1467,8 +1462,8 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        // Keep prompt SHORT — Pollinations is fast with short prompts, times out with long ones
-        var prompt = "Chill gamer reply under " + CHATBOT_MAX_LENGTH + " chars to: \"" + incomingText + "\". No quotes. Engage with what they said.";
+        // Ultra-short prompt for speed
+        var prompt = "You are in arras.io. Reply under " + CHATBOT_MAX_LENGTH + " chars to: " + incomingText;
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
