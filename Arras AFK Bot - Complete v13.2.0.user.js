@@ -1426,9 +1426,18 @@
                 clearTimeout(timeoutId);
                 if (response.ok) {
                     var text = await response.text();
-                    console.log("[AFK Bot] AI raw: " + text.substring(0, 80));
+                    console.log("[AFK Bot] AI raw: " + text.substring(0, 100));
                     text = text.trim().replace(/[\n\r"]/g, " ");
-                    // Sanitize: reject responses that look like debug/render output
+                    // Strip Pollinations deprecation/API notices that get prepended/appended
+                    text = text.replace(/\*?\*?IMPORTANT\s*NOTICE\*?\*?.*$/i, "").trim();
+                    text = text.replace(/pollinations.*api/i, "").trim();
+                    text = text.replace(/deprecated.*$/i, "").trim();
+                    text = text.replace(/https?:\/\/[^\s]+/g, "").trim(); // strip URLs
+                    text = text.replace(/\*\*/g, "").trim(); // strip markdown bold
+                    // Sanitize: reject responses that are API notices or code
+                    if (/NOTICE|IMPORTANT|deprecated|legacy|api\s*key|endpoint|migrate/i.test(text)) {
+                        console.log("[AFK Bot] Rejected: API notice"); return null;
+                    }
                     if (/render\s*[:(\[]/i.test(text)) { console.log("[AFK Bot] Rejected: render pattern"); return null; }
                     if (/^[\{\[\(]/.test(text)) { console.log("[AFK Bot] Rejected: starts with bracket"); return null; }
                     if (/console\.|function\s|var\s|let\s|const\s/i.test(text)) { console.log("[AFK Bot] Rejected: code pattern"); return null; }
