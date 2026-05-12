@@ -4,7 +4,8 @@
 // @version      13.2.0
 // @description  Full AFK bot with fluid movement, smart wall navigation, auto-reconnect, AND iframe bot instances (no separate windows!)
 // @match        *://arras.io/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      text.pollinations.ai
 // @run-at       document-start
 // ==/UserScript==
 
@@ -1405,37 +1406,46 @@
     }
 
     // Call Pollinations.ai (free, no API key needed)
-    async function callPollinations(prompt) {
-        try {
-            // Use AbortController for 15-second timeout (Pollinations can be slow)
-            var controller = new AbortController();
-            var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
-            var response = await fetch("https://text.pollinations.ai/" + encodeURIComponent(prompt), {
-                method: "GET",
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            if (response.ok) {
-                var text = await response.text();
-                text = text.trim().replace(/[\n\r"]/g, " ");
-                // Sanitize: reject responses that look like debug/render output
-                if (/render\s*[:(\[]/i.test(text)) return null;
-                if (/^[\{\[\(]/.test(text)) return null;       // starts with { [ (
-                if (/console\.|function\s|var\s|let\s|const\s/i.test(text)) return null; // code
-                if (text.split("(").length > 2) return null;   // too many parentheses
-                // Strip any leading metadata/prefix before actual message
-                text = text.replace(/^[^a-zA-Z]*/, "");        // strip leading non-alpha chars
-                if (text.length < 2) return null;
-                return text.substring(0, CHATBOT_MAX_LENGTH);
-            }
-        } catch (e) {
-            if (e.name === "AbortError") {
+    // Uses GM_xmlhttpRequest to bypass CORS (fetch gets blocked from arras.io)
+    function callPollinations(prompt) {
+        return new Promise(function(resolve) {
+            var timedOut = false;
+            var timer = setTimeout(function() {
+                timedOut = true;
                 console.log("[AFK Bot] Pollinations timed out (15s)");
-            } else {
-                console.log("[AFK Bot] Pollinations API error:", e);
-            }
-        }
-        return null;
+                resolve(null);
+            }, 15000);
+
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: "https://text.pollinations.ai/" + encodeURIComponent(prompt),
+                onload: function(resp) {
+                    if (timedOut) return;
+                    clearTimeout(timer);
+                    if (resp.status === 200 && resp.responseText) {
+                        var text = resp.responseText.trim().replace(/[\n\r"]/g, " ");
+                        // Sanitize: reject responses that look like debug/render output
+                        if (/render\s*[:(\[]/i.test(text)) { resolve(null); return; }
+                        if (/^[\{\[\(]/.test(text)) { resolve(null); return; }
+                        if (/console\.|function\s|var\s|let\s|const\s/i.test(text)) { resolve(null); return; }
+                        if (text.split("(").length > 2) { resolve(null); return; }
+                        // Strip any leading metadata/prefix before actual message
+                        text = text.replace(/^[^a-zA-Z]*/, "");
+                        if (text.length < 2) { resolve(null); return; }
+                        resolve(text.substring(0, CHATBOT_MAX_LENGTH));
+                    } else {
+                        console.log("[AFK Bot] Pollinations returned status: " + resp.status);
+                        resolve(null);
+                    }
+                },
+                onerror: function(err) {
+                    if (timedOut) return;
+                    clearTimeout(timer);
+                    console.log("[AFK Bot] Pollinations error:", err);
+                    resolve(null);
+                }
+            });
+        });
     }
 
     // Get a random phrase from the local phrase bank (fallback)
