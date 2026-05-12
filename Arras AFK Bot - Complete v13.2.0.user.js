@@ -1350,7 +1350,15 @@
             });
             if (response.ok) {
                 var text = await response.text();
-                return text.trim().replace(/[\n\r"]/g, " ").substring(0, CHATBOT_MAX_LENGTH);
+                text = text.trim().replace(/[\n\r"]/g, " ");
+                // Sanitize: reject responses that look like debug/render output
+                if (/render\s*[:(\[]/i.test(text)) return null;
+                if (/^[\{\[\(]/.test(text)) return null;       // starts with { [ (
+                if (/console\.|function\s|var\s|let\s|const\s/i.test(text)) return null; // code
+                if (text.split("(").length > 2) return null;   // too many parentheses
+                // Strip any leading metadata/prefix before actual message
+                text = text.replace(/^[^a-zA-Z]*/, "");        // strip leading non-alpha chars
+                return text.substring(0, CHATBOT_MAX_LENGTH);
             }
         } catch (e) {
             console.log("[AFK Bot] Pollinations API error:", e);
@@ -1376,6 +1384,7 @@
 
     // Respond to a detected chat message
     async function respondToChat(incomingText) {
+        if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
         var prompt = chatbotPersonality + "\n\n" +
