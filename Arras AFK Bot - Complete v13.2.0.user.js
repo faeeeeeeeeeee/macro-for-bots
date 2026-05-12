@@ -1348,6 +1348,8 @@
 
     // Respond to a detected chat message
     async function respondToChat(incomingText) {
+        // Lock cooldown immediately so no second message can start while API is loading
+        lastChatTime = Date.now();
         var prompt = chatbotPersonality + "\n\n" +
             "Someone in the game said: \"" + incomingText + "\"\n" +
             "Reply with a short in-game chat message (under " + CHATBOT_MAX_LENGTH + " characters). " +
@@ -1363,6 +1365,8 @@
         if (!chatbotEnabled) return;
         var now = Date.now();
         if (now - lastChatTime < CHATBOT_COOLDOWN) return;
+        // Lock cooldown immediately so no second message can start while API is loading
+        lastChatTime = now;
 
         var tankName = tankUpgrades[selectedTankUpgrade] ? tankUpgrades[selectedTankUpgrade].name : "Basic";
         var fallbackCategory = eventType.includes("died") || eventType.includes("death") ? "death" : "spawn";
