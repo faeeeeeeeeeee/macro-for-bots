@@ -1181,7 +1181,7 @@
     var CHAT_PHRASES = {
         spawn: ["here we go", "back again", "round 2", "lets go", "im back", "ready up", "alright", "back for more"],
         death: ["oof", "gg", "ill be back", "not bad", "nice shot", "well played", "fair enough", "unlucky"],
-        respond: ["lol", "gg", "nice", "true", "yeah", "haha", "for real", "good one", "fair", "agreed", "same", "yep", "oh well", "interesting"]
+        respond: ["lol", "good question", "hmm idk", "thats a tough one", "maybe", "haha nice", "good point", "honestly not sure", "fair enough", "interesting", "wait what", "lmao", "hold on", "you tell me"]
     };
 
     // Known non-chat text patterns to filter out
@@ -1407,9 +1407,14 @@
     // Call Pollinations.ai (free, no API key needed)
     async function callPollinations(prompt) {
         try {
+            // Use AbortController for 8-second timeout (don't fall back too quickly)
+            var controller = new AbortController();
+            var timeoutId = setTimeout(function() { controller.abort(); }, 8000);
             var response = await fetch("https://text.pollinations.ai/" + encodeURIComponent(prompt), {
-                method: "GET"
+                method: "GET",
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (response.ok) {
                 var text = await response.text();
                 text = text.trim().replace(/[\n\r"]/g, " ");
@@ -1420,10 +1425,15 @@
                 if (text.split("(").length > 2) return null;   // too many parentheses
                 // Strip any leading metadata/prefix before actual message
                 text = text.replace(/^[^a-zA-Z]*/, "");        // strip leading non-alpha chars
+                if (text.length < 2) return null;
                 return text.substring(0, CHATBOT_MAX_LENGTH);
             }
         } catch (e) {
-            console.log("[AFK Bot] Pollinations API error:", e);
+            if (e.name === "AbortError") {
+                console.log("[AFK Bot] Pollinations timed out (8s)");
+            } else {
+                console.log("[AFK Bot] Pollinations API error:", e);
+            }
         }
         return null;
     }
@@ -1451,7 +1461,9 @@
         lastChatTime = Date.now();
         var prompt = chatbotPersonality + "\n\n" +
             "Someone in the game said: \"" + incomingText + "\"\n" +
-            "Reply with a short in-game chat message (under " + CHATBOT_MAX_LENGTH + " characters). " +
+            "Actually engage with what they said. If they ask a question, answer it. " +
+            "If they make a statement, respond naturally. Be conversational. " +
+            "Reply in under " + CHATBOT_MAX_LENGTH + " characters. " +
             "Just the message text, no quotes, no explanation.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
