@@ -1156,6 +1156,7 @@
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
+    var ownSentMessages = {};      // Bot's own messages: text -> timestamp (ignore for 10s)
 
     // Local phrase bank — used as fallback when Pollinations.ai is unavailable
     var CHAT_PHRASES = {
@@ -1209,6 +1210,8 @@
     // and don't render every frame like player names do
     function isChatMessage(text) {
         if (!text || text.length < 2 || text.length > 60) return false;
+        // Skip bot's own messages (ignore for 10 seconds after sending)
+        if (ownSentMessages[text] && Date.now() - ownSentMessages[text] < 10000) return false;
         // Skip known player names (rendered every frame)
         if (knownNames[text]) return false;
         for (var i = 0; i < CHAT_IGNORE_PATTERNS.length; i++) {
@@ -1267,6 +1270,13 @@
         blockAllKeys = true; // Block ALL simulateKey dispatches (movement, etc.)
 
         console.log("[AFK Bot] Sending chat: " + message);
+
+        // Store own message so we don't respond to our own chat bubble
+        ownSentMessages[message] = Date.now();
+        // Clean old entries
+        for (var key in ownSentMessages) {
+            if (Date.now() - ownSentMessages[key] > 15000) delete ownSentMessages[key];
+        }
 
         // Release all held movement keys before we block
         releaseAllMovement();
