@@ -1407,9 +1407,9 @@
     // Call Pollinations.ai (free, no API key needed)
     async function callPollinations(prompt) {
         try {
-            // Use AbortController for 8-second timeout (don't fall back too quickly)
+            // Use AbortController for 15-second timeout (Pollinations can be slow)
             var controller = new AbortController();
-            var timeoutId = setTimeout(function() { controller.abort(); }, 8000);
+            var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
             var response = await fetch("https://text.pollinations.ai/" + encodeURIComponent(prompt), {
                 method: "GET",
                 signal: controller.signal
@@ -1430,7 +1430,7 @@
             }
         } catch (e) {
             if (e.name === "AbortError") {
-                console.log("[AFK Bot] Pollinations timed out (8s)");
+                console.log("[AFK Bot] Pollinations timed out (15s)");
             } else {
                 console.log("[AFK Bot] Pollinations API error:", e);
             }
@@ -1459,12 +1459,8 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = chatbotPersonality + "\n\n" +
-            "Someone in the game said: \"" + incomingText + "\"\n" +
-            "Actually engage with what they said. If they ask a question, answer it. " +
-            "If they make a statement, respond naturally. Be conversational. " +
-            "Reply in under " + CHATBOT_MAX_LENGTH + " characters. " +
-            "Just the message text, no quotes, no explanation.";
+        // Keep prompt SHORT — Pollinations is fast with short prompts, times out with long ones
+        var prompt = "Chill gamer reply under " + CHATBOT_MAX_LENGTH + " chars to: \"" + incomingText + "\". No quotes. Engage with what they said.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
