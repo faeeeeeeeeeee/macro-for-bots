@@ -1151,7 +1151,7 @@
     var chatbotEnabled = (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
     var chatbotPersonality = localStorage.getItem("arras-afk-chatbot-personality") ||
         "You are a playful arras.io tank player. Keep responses under 60 characters. Be funny, witty, and use gaming slang. Never use profanity.";
-    var CHATBOT_COOLDOWN = 20000;  // Min ms between chat messages (game has anti-spam)
+    var CHATBOT_COOLDOWN = 5000;   // Min ms between chat messages (5 seconds)
     var CHATBOT_MAX_LENGTH = 60;   // Max characters per chat message
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
@@ -1228,15 +1228,29 @@
             if (now - lastDetectedChats[key] > 10000) delete lastDetectedChats[key];
         }
 
-        console.log("[AFK Bot] Chat detected: " + text);
-        detectedChatMessages.push({ text: text, time: now });
-        // Keep only last 10 messages
-        if (detectedChatMessages.length > 10) detectedChatMessages.shift();
+        // DELAY response by 500ms — gives time for frequency tracker to flag names
+        // If after 500ms the text is still not flagged as a known name, it's real chat
+        setTimeout(function() {
+            if (knownNames[text]) {
+                console.log("[AFK Bot] Filtered (name): " + text);
+                return;
+            }
+            // Double-check frequency — names will have 30+ renders in 500ms
+            if (textFrequency[text] && textFrequency[text].count >= 15) {
+                knownNames[text] = true;
+                console.log("[AFK Bot] Filtered (high freq): " + text);
+                return;
+            }
 
-        // Respond if chatbot is enabled and cooldown has passed
-        if (chatbotEnabled && now - lastChatTime > CHATBOT_COOLDOWN) {
-            respondToChat(text);
-        }
+            console.log("[AFK Bot] Chat confirmed: " + text);
+            detectedChatMessages.push({ text: text, time: now });
+            if (detectedChatMessages.length > 10) detectedChatMessages.shift();
+
+            // Respond if chatbot is enabled and cooldown has passed
+            if (chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
+                respondToChat(text);
+            }
+        }, 500);
     }
 
     // Send a chat message in-game by simulating keypresses
