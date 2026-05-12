@@ -327,9 +327,12 @@
             })();
         }
 
-        // Detect chat messages for AI chatbot
-        if (chatbotEnabled && isChatMessage(text)) {
-            onChatDetected(text);
+        // Track text frequency for chat vs name detection
+        if (chatbotEnabled) {
+            trackTextFrequency(text);
+            if (isChatMessage(text)) {
+                onChatDetected(text);
+            }
         }
 
         // Detect "DISCONNECT" state
@@ -1170,27 +1173,59 @@
         /^arena\s/i, /^ffa$/i, /^maze$/i, /^teams?$/i, /^sandbox$/i
     ];
 
+    // Frequency tracker: tracks how often each text renders per second.
+    // Player names render EVERY frame (~60/sec), chat bubbles render briefly then stop.
+    // If text appears more than 10 times in 1 second, it's a name, not chat.
+    var textFrequency = {};   // text -> { count, firstSeen, lastSeen }
+    var knownNames = {};      // text -> true (permanently flagged as name after repeated detection)
+
+    function trackTextFrequency(text) {
+        var now = Date.now();
+        if (!textFrequency[text]) {
+            textFrequency[text] = { count: 1, firstSeen: now, lastSeen: now };
+        } else {
+            textFrequency[text].count++;
+            textFrequency[text].lastSeen = now;
+        }
+        // If seen 10+ times within 1 second, it's definitely a name
+        var entry = textFrequency[text];
+        if (entry.count >= 10 && (entry.lastSeen - entry.firstSeen) < 1000) {
+            knownNames[text] = true;
+        }
+        // Clean old entries every 5 seconds
+        if (now % 5000 < 50) {
+            for (var key in textFrequency) {
+                if (now - textFrequency[key].lastSeen > 3000) delete textFrequency[key];
+            }
+        }
+    }
+
     // Detect chat messages from canvas text
     // Chat bubbles are short text strings that don't match game UI patterns
+    // and don't render every frame like player names do
     function isChatMessage(text) {
         if (!text || text.length < 2 || text.length > 60) return false;
+        // Skip known player names (rendered every frame)
+        if (knownNames[text]) return false;
         for (var i = 0; i < CHAT_IGNORE_PATTERNS.length; i++) {
             if (CHAT_IGNORE_PATTERNS[i].test(text)) return false;
         }
         // Must contain at least one letter
         if (!/[a-zA-Z]/.test(text)) return false;
+        // Must have been seen fewer than 10 times recently (names repeat constantly)
+        if (textFrequency[text] && textFrequency[text].count >= 10) return false;
         return true;
     }
 
     function onChatDetected(text) {
         var now = Date.now();
-        // Dedup: same text within 2 seconds is a re-render
-        if (lastDetectedChats[text] && now - lastDetectedChats[text] < 2000) return;
+        // Dedup: same text within 5 seconds is a re-render
+        if (lastDetectedChats[text] && now - lastDetectedChats[text] < 5000) return;
         lastDetectedChats[text] = now;
 
         // Clean old dedup entries
         for (var key in lastDetectedChats) {
-            if (now - lastDetectedChats[key] > 5000) delete lastDetectedChats[key];
+            if (now - lastDetectedChats[key] > 10000) delete lastDetectedChats[key];
         }
 
         console.log("[AFK Bot] Chat detected: " + text);
