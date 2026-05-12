@@ -19,7 +19,7 @@
     // ║                                                                     ║
     // ║  Search for these tags to jump to each section:                      ║
     // ║                                                                     ║
-    // ║  [SECTION: IFRAME-BOTS]    - Iframe bot system (spawn sub-tabs)     ║
+    // ║  [SECTION: BOT-SYSTEM]     - Bot windows + proxy assignment          ║
     // ║  [SECTION: COORD-DETECT]   - Canvas text coordinate detection       ║
     // ║  [SECTION: WEBSOCKET]      - WebSocket hook (intercepts game conn)  ║
     // ║  [SECTION: BROADCAST]      - BroadcastChannel & tab communication   ║
@@ -33,7 +33,7 @@
     // ║  [SECTION: MOVEMENT-CFG]   - Movement config (roam, summon, etc.)   ║
     // ║  [SECTION: DEATH-DETECT]   - Death detection & auto-respawn         ║
     // ║  [SECTION: BUILD-SEQ]      - Post-respawn build sequence            ║
-    // ║  [SECTION: AI-CHATBOT]    - Gemini AI chatbot (auto-chat in game)  ║
+    // ║  [SECTION: AI-CHATBOT]    - AI chatbot (Pollinations.ai, free)    ║
     // ║  [SECTION: MOVEMENT]       - Movement directions & fluid movement   ║
     // ║  [SECTION: WALL-DETECT]    - Wall detection & avoidance             ║
     // ║  [SECTION: GUI-HTML]       - GUI panel HTML & CSS                   ║
@@ -73,23 +73,60 @@
     // ╚═══════════════════════════════════════════════════════════════════════╝
 
     // =========================================================================
-    // [SECTION: IFRAME-BOTS] Iframe Bot System
-    // Creates bot instances as iframes instead of separate browser windows.
-    // Each bot runs the same script in a sub-tab within the page.
-    // Functions: createBotIframe(), removeBotInstance(), saveBotState()
-    // Only runs in the TOP window — iframes skip this entire block.
+    // [SECTION: BOT-SYSTEM] Bot Window & Proxy System
+    // Opens bot instances as separate windows (not iframes) so proxy extensions
+    // can route each window through a different SOCKS5 proxy.
+    // Functions: createBotWindow(), removeBotWindow(), saveBotState()
+    // Only runs in the TOP window.
+    // =========================================================================
+    // [SECTION: PROXY-LIST] SOCKS5 Proxy List
+    // Each bot window can be routed through a different proxy using a proxy
+    // extension (like FoxyProxy or Proxy SwitchyOmega).
+    // Proxies are assigned round-robin to new bot windows.
+    //
+    // HOW TO USE WITH FOXYPROXY:
+    //   1. Install FoxyProxy extension
+    //   2. Add each proxy below as a SOCKS5 entry in FoxyProxy settings
+    //   3. Set FoxyProxy to route by tab/pattern or use the assigned proxy
+    //   4. Each bot window title shows which proxy it should use
+    // =========================================================================
+    var PROXY_LIST = [
+        "socks5://192.252.209.155:14455",
+        "socks5://192.252.208.67:14287",
+        "socks5://123.54.197.16:21168",
+        "socks5://142.54.228.193:4145",
+        "socks5://123.54.197.19:22701",
+        "socks5://123.54.197.25:21715",
+        "socks5://123.54.197.50:21141",
+        "socks5://123.54.197.53:22917",
+        "socks5://142.54.231.38:4145",
+        "socks5://123.54.197.20:21281",
+        "socks5://170.233.30.33:4153",
+        "socks5://104.200.152.30:4145",
+        "socks5://221.202.27.194:10807",
+        "socks5://203.189.154.129:1080",
+        "socks5://123.54.197.52:20291",
+        "socks5://58.187.104.67:1090",
+        "socks5://208.65.90.3:4145",
+        "socks5://123.54.197.21:20909",
+        "socks5://174.77.111.198:49547",
+        "socks5://123.54.197.24:20969",
+        "socks5://98.191.0.47:4145",
+        "socks5://98.182.147.97:4145",
+        "socks5://123.54.197.51:21977"
+    ];
+    var nextProxyIndex = 0;
+
+    // =========================================================================
+    // [SECTION: BOT-WINDOWS] Bot Window System
+    // Opens separate browser windows/tabs for each bot instance.
+    // Separate windows allow proxy extensions to route each one differently.
+    // Each window's title includes the assigned proxy for easy identification.
+    //
+    // Functions: createBotWindow(), removeBotWindow(), updateBotList()
+    // Only runs in the TOP window.
     // =========================================================================
     if (!isInsideIframe) {
-    var botIframes = document.createElement("div");
-    botIframes.id = "botIframes";
-    botIframes.style.position = "fixed";
-    botIframes.style.bottom = "20px";
-    botIframes.style.right = "20px";
-    botIframes.style.zIndex = 999998;
-    botIframes.style.display = "flex";
-    botIframes.style.flexDirection = "column";
-    botIframes.style.gap = "10px";
-    document.body.appendChild(botIframes);
 
     window.botInstances = [];
 
@@ -97,24 +134,21 @@
         var botData = [];
         for (var i = 0; i < window.botInstances.length; i++) {
             var bot = window.botInstances[i];
-            botData.push({
-                id: i,
-                width: bot.container.offsetWidth,
-                height: bot.container.offsetHeight
-            });
+            botData.push({ id: i, proxy: bot.proxy });
         }
         localStorage.setItem("arras-afk-bots", JSON.stringify(botData));
     }
 
-    function removeBotInstance(index) {
+    function removeBotWindow(index) {
         if (window.botInstances[index]) {
             var bot = window.botInstances[index];
-            if (bot.container.parentNode) {
-                bot.container.parentNode.removeChild(bot.container);
+            if (bot.win && !bot.win.closed) {
+                bot.win.close();
             }
             window.botInstances.splice(index, 1);
             saveBotState();
             updateBotList();
+            console.log("[AFK Bot] Closed bot window #" + (index + 1));
         }
     }
 
@@ -124,6 +158,7 @@
 
         listEl.innerHTML = "";
         for (var i = 0; i < window.botInstances.length; i++) {
+            var bot = window.botInstances[i];
             var botItem = document.createElement("div");
             botItem.style.display = "flex";
             botItem.style.justifyContent = "space-between";
@@ -132,11 +167,13 @@
             botItem.style.background = "rgba(10,10,26,0.6)";
             botItem.style.borderRadius = "6px";
             botItem.style.marginBottom = "4px";
-            botItem.style.fontSize = "12px";
+            botItem.style.fontSize = "11px";
 
             var label = document.createElement("span");
-            label.textContent = "Bot #" + (i + 1);
-            label.style.color = "#ccc";
+            var proxyShort = bot.proxy ? bot.proxy.replace("socks5://", "") : "no proxy";
+            var status = (bot.win && !bot.win.closed) ? "open" : "closed";
+            label.textContent = "Bot #" + (i + 1) + " [" + proxyShort + "] (" + status + ")";
+            label.style.color = status === "open" ? "#4caf50" : "#f44336";
             botItem.appendChild(label);
 
             var closeBtn = document.createElement("button");
@@ -150,9 +187,7 @@
             closeBtn.style.fontSize = "11px";
             closeBtn.style.fontWeight = "bold";
             closeBtn.onclick = (function(idx) {
-                return function() {
-                    removeBotInstance(idx);
-                };
+                return function() { removeBotWindow(idx); };
             })(i);
             botItem.appendChild(closeBtn);
 
@@ -160,141 +195,52 @@
         }
     }
 
-    function createBotIframe() {
-        // Create container for iframe + resize handle + close button
-        var container = document.createElement("div");
-        container.style.position = "relative";
-        container.style.width = "300px";
-        container.style.height = "200px";
-        container.style.display = "flex";
-        container.style.flexDirection = "column";
+    function createBotWindow() {
+        // Assign proxy round-robin
+        var proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
+        nextProxyIndex++;
 
-        // Create header with close button
-        var header = document.createElement("div");
-        header.style.position = "absolute";
-        header.style.top = "0";
-        header.style.right = "0";
-        header.style.zIndex = "1001";
-        header.style.padding = "4px";
-        header.style.cursor = "pointer";
+        // Open new window/tab to the game
+        var botWin = window.open(location.href, "_blank",
+            "width=400,height=300,menubar=no,toolbar=no,location=yes,status=no");
 
-        var closeBtn = document.createElement("div");
-        closeBtn.style.background = "#f44336";
-        closeBtn.style.color = "#fff";
-        closeBtn.style.width = "20px";
-        closeBtn.style.height = "20px";
-        closeBtn.style.display = "flex";
-        closeBtn.style.alignItems = "center";
-        closeBtn.style.justifyContent = "center";
-        closeBtn.style.borderRadius = "3px";
-        closeBtn.style.fontSize = "14px";
-        closeBtn.style.fontWeight = "bold";
-        closeBtn.style.cursor = "pointer";
-        closeBtn.textContent = "✕";
-        header.appendChild(closeBtn);
-        container.appendChild(header);
-
-        var iframe = document.createElement("iframe");
-        iframe.src = location.href;
-        iframe.style.flex = "1";
-        iframe.style.border = "2px solid #4caf50";
-        iframe.style.borderRadius = "8px";
-        iframe.style.background = "#0a0a1a";
-        iframe.style.margin = "0";
-        iframe.style.padding = "0";
-        iframe.title = "Bot Instance #" + (window.botInstances.length + 1);
-        container.appendChild(iframe);
-
-        // Create resize handle
-        var resizeHandle = document.createElement("div");
-        resizeHandle.style.position = "absolute";
-        resizeHandle.style.bottom = "0";
-        resizeHandle.style.right = "0";
-        resizeHandle.style.width = "15px";
-        resizeHandle.style.height = "15px";
-        resizeHandle.style.background = "linear-gradient(135deg, transparent 50%, #4caf50 50%)";
-        resizeHandle.style.cursor = "nwse-resize";
-        resizeHandle.style.zIndex = "1000";
-        container.appendChild(resizeHandle);
-
-        // Make resizable
-        var isResizing = false;
-        var startX = 0;
-        var startY = 0;
-        var startWidth = 300;
-        var startHeight = 200;
-
-        resizeHandle.addEventListener("mousedown", function(e) {
-            isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startWidth = container.offsetWidth;
-            startHeight = container.offsetHeight;
-            e.preventDefault();
-        });
-
-        document.addEventListener("mousemove", function(e) {
-            if (!isResizing) return;
-            var newWidth = startWidth + (e.clientX - startX);
-            var newHeight = startHeight + (e.clientY - startY);
-            if (newWidth > 150) container.style.width = newWidth + "px";
-            if (newHeight > 120) container.style.height = newHeight + "px";
-        });
-
-        document.addEventListener("mouseup", function() {
-            isResizing = false;
-        });
-
-        botIframes.appendChild(container);
+        if (!botWin) {
+            console.log("[AFK Bot] Popup blocked! Allow popups for this site.");
+            alert("Popup blocked! Please allow popups for arras.io in your browser settings.");
+            return null;
+        }
 
         var botIndex = window.botInstances.length;
         var botObj = {
-            iframe: iframe,
-            contentWindow: iframe.contentWindow,
+            win: botWin,
             index: botIndex,
-            container: container
+            proxy: proxy
         };
-
         window.botInstances.push(botObj);
 
-        // Close button handler
-        closeBtn.addEventListener("click", function() {
-            removeBotInstance(botIndex);
-        });
-
-        // Setup bot window
+        // Set window title to show proxy assignment
         setTimeout(function() {
-            var win = iframe.contentWindow;
-            win.__is_bot = true;
-            win.botIndex = botObj.index;
+            try {
+                botWin.document.title = "Bot #" + (botIndex + 1) + " | " + proxy;
+            } catch(e) {}
+        }, 2000);
 
-            win.channel = {
-                message: function() {},
-                reconnect: function() {
-                    setTimeout(function() {
-                        try {
-                            var pressEnterEvent = new KeyboardEvent("keydown", {
-                                key: "Enter",
-                                code: "Enter",
-                                keyCode: 13,
-                                bubbles: true,
-                                cancelable: true
-                            });
-                            win.document.dispatchEvent(pressEnterEvent);
-                        } catch(e) {}
-                    }, 50);
-                }
-            };
-        }, 500);
+        // Monitor if window gets closed
+        var checkClosed = setInterval(function() {
+            if (botWin.closed) {
+                clearInterval(checkClosed);
+                updateBotList();
+            }
+        }, 3000);
 
-        console.log("[AFK Bot] Created bot iframe #" + (window.botInstances.length));
+        console.log("[AFK Bot] Opened bot window #" + (botIndex + 1) + " with proxy: " + proxy);
         saveBotState();
         updateBotList();
         return botObj;
     }
 
-    window.createBotIframe = createBotIframe;
-    window.removeBotInstance = removeBotInstance;
+    window.createBotWindow = createBotWindow;
+    window.removeBotWindow = removeBotWindow;
     } // end if (!isInsideIframe)
 
     // =========================================================================
@@ -1183,14 +1129,14 @@
     }
 
     // =========================================================================
-    // [SECTION: AI-CHATBOT] Gemini AI Chatbot
-    // Reads in-game chat messages and responds using Google Gemini API.
+    // [SECTION: AI-CHATBOT] AI Chatbot (Pollinations.ai + Local Fallback)
+    // Reads in-game chat messages and responds using Pollinations.ai (free, no key).
+    // Falls back to local phrase bank if the API is unreachable.
     // Also sends contextual messages on events (spawn, death, etc.).
     //
     // HOW TO SET UP:
-    //   1. Get a free API key at https://aistudio.google.com/app/apikey
-    //   2. Open the bot panel (ESC) and paste your key in the AI Chatbot section
-    //   3. Toggle the chatbot on
+    //   1. Open the bot panel (ESC)
+    //   2. Toggle the chatbot on — that's it! No API key needed.
     //
     // HOW TO CUSTOMIZE:
     //   - Change the personality prompt in the GUI text field
@@ -1198,16 +1144,20 @@
     //   - Adjust CHATBOT_MAX_LENGTH for message length limit
     // =========================================================================
     var chatbotEnabled = (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
-    var geminiApiKey = localStorage.getItem("arras-afk-gemini-key") || "";
     var chatbotPersonality = localStorage.getItem("arras-afk-chatbot-personality") ||
         "You are a playful arras.io tank player. Keep responses under 40 characters. Be funny, witty, and use gaming slang. Never use profanity.";
     var CHATBOT_COOLDOWN = 20000;  // Min ms between chat messages (game has anti-spam)
     var CHATBOT_MAX_LENGTH = 40;   // Max characters per chat message
     var lastChatTime = 0;
-    var chatHistory = [];          // Recent messages for context
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
-    var chatbotReady = false;      // True once in-game
+
+    // Local phrase bank — used as fallback when Pollinations.ai is unavailable
+    var CHAT_PHRASES = {
+        spawn: ["gg lets go", "im back baby", "round 2 fight", "here we go again", "miss me?", "back for more", "sup gamers", "the grind continues"],
+        death: ["oof", "bruh moment", "ill be back", "not even close", "lag killed me", "GG", "that was cheap", "respawning in style"],
+        respond: ["lol", "gg", "nice one", "fr fr", "true", "nah bro", "bet", "say less", "W take", "facts", "no cap", "sus", "cope", "ratio", "skill issue"]
+    };
 
     // Known non-chat text patterns to filter out
     var CHAT_IGNORE_PATTERNS = [
@@ -1247,7 +1197,7 @@
         if (detectedChatMessages.length > 10) detectedChatMessages.shift();
 
         // Respond if chatbot is enabled and cooldown has passed
-        if (chatbotEnabled && geminiApiKey && now - lastChatTime > CHATBOT_COOLDOWN) {
+        if (chatbotEnabled && now - lastChatTime > CHATBOT_COOLDOWN) {
             respondToChat(text);
         }
     }
@@ -1298,33 +1248,36 @@
         document.dispatchEvent(enterUp);
     }
 
-    // Call Gemini API
-    async function callGemini(prompt) {
-        if (!geminiApiKey) return null;
+    // Call Pollinations.ai (free, no API key needed)
+    async function callPollinations(prompt) {
         try {
-            var response = await fetch(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: {
-                            maxOutputTokens: 30,
-                            temperature: 0.9
-                        }
-                    })
-                }
-            );
-            var data = await response.json();
-            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                var text = data.candidates[0].content.parts[0].text;
-                return text.trim().replace(/[\n\r]/g, " ").substring(0, CHATBOT_MAX_LENGTH);
+            var response = await fetch("https://text.pollinations.ai/" + encodeURIComponent(prompt), {
+                method: "GET"
+            });
+            if (response.ok) {
+                var text = await response.text();
+                return text.trim().replace(/[\n\r"]/g, " ").substring(0, CHATBOT_MAX_LENGTH);
             }
         } catch (e) {
-            console.log("[AFK Bot] Gemini API error:", e);
+            console.log("[AFK Bot] Pollinations API error:", e);
         }
         return null;
+    }
+
+    // Get a random phrase from the local phrase bank (fallback)
+    function getLocalPhrase(category) {
+        var phrases = CHAT_PHRASES[category] || CHAT_PHRASES.respond;
+        return phrases[Math.floor(Math.random() * phrases.length)];
+    }
+
+    // Get AI response — tries Pollinations first, falls back to local phrases
+    async function getAIResponse(prompt, fallbackCategory) {
+        var reply = await callPollinations(prompt);
+        if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH) {
+            return reply;
+        }
+        // Fallback to local phrase bank
+        return getLocalPhrase(fallbackCategory || "respond");
     }
 
     // Respond to a detected chat message
@@ -1332,8 +1285,8 @@
         var prompt = chatbotPersonality + "\n\n" +
             "Someone in the game said: \"" + incomingText + "\"\n" +
             "Reply with a short in-game chat message (under " + CHATBOT_MAX_LENGTH + " characters). " +
-            "Just the message text, no quotes.";
-        var reply = await callGemini(prompt);
+            "Just the message text, no quotes, no explanation.";
+        var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
         }
@@ -1341,17 +1294,18 @@
 
     // Generate a contextual message for game events
     async function chatOnEvent(eventType) {
-        if (!chatbotEnabled || !geminiApiKey) return;
+        if (!chatbotEnabled) return;
         var now = Date.now();
         if (now - lastChatTime < CHATBOT_COOLDOWN) return;
 
         var tankName = tankUpgrades[selectedTankUpgrade] ? tankUpgrades[selectedTankUpgrade].name : "Basic";
+        var fallbackCategory = eventType.includes("died") || eventType.includes("death") ? "death" : "spawn";
         var prompt = chatbotPersonality + "\n\n" +
             "You are playing arras.io as a " + tankName + " tank. " +
             "Event: " + eventType + ". " +
             "Send a short chat message (under " + CHATBOT_MAX_LENGTH + " characters). " +
-            "Just the message text, no quotes.";
-        var reply = await callGemini(prompt);
+            "Just the message text, no quotes, no explanation.";
+        var reply = await getAIResponse(prompt, fallbackCategory);
         if (reply) {
             await sendGameChat(reply);
         }
@@ -1715,25 +1669,22 @@
             '  </div>',
             '</div>',
             '',
-            // Bot Iframes section - only shown in top window (not inside iframes)
+            // Bot Windows section - only shown in top window
             (isInsideIframe ? '' : [
             '<div class="section">',
-            '  <h3>Bot Iframes</h3>',
-            '  <p><button id="btn-create-iframe" class="btn btn-summon">+ Create Bot Tab</button></p>',
-            '  <p style="font-size:12px;color:#888;">Bots persist after reload!<br/>Click ✕ on bot frame to close</p>',
-            '  <div id="bot-list" style="margin-top:8px;max-height:120px;overflow-y:auto;"></div>',
+            '  <h3>Bot Windows + Proxies</h3>',
+            '  <p><button id="btn-create-bot" class="btn btn-summon">+ Open Bot Window</button></p>',
+            '  <p style="font-size:11px;color:#888;">Each window gets a different proxy.<br/>Use FoxyProxy to route each tab through its assigned proxy.<br/>Window title shows which proxy to use.</p>',
+            '  <div id="bot-list" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>',
+            '  <p style="font-size:11px;color:#666;margin-top:6px;">Proxies available: ' + PROXY_LIST.length + ' | Next: #' + (nextProxyIndex + 1) + '</p>',
             '</div>',
             ].join('\n')),
             '',
             '<div class="section">',
-            '  <h3>AI Chatbot (Gemini)</h3>',
+            '  <h3>AI Chatbot (Free - No Key)</h3>',
             '  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">',
             '    <label style="color:#ccc;font-size:13px;">Enable</label>',
             '    <input type="checkbox" id="chatbot-toggle" ' + (chatbotEnabled ? 'checked' : '') + '>',
-            '  </div>',
-            '  <div style="margin-bottom:8px;">',
-            '    <label style="color:#888;font-size:11px;">Gemini API Key (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#4caf50;">get free key</a>)</label>',
-            '    <input type="password" id="gemini-key" placeholder="Paste API key here..." value="' + (geminiApiKey ? '••••••••' : '') + '" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:12px;">',
             '  </div>',
             '  <div style="margin-bottom:8px;">',
             '    <label style="color:#888;font-size:11px;">Personality Prompt</label>',
@@ -1743,7 +1694,7 @@
             '    <button id="btn-test-chat" class="btn btn-summon" style="font-size:11px;padding:4px 12px;">Test Chat</button>',
             '    <span id="chatbot-status" style="color:#888;font-size:11px;margin-left:8px;"></span>',
             '  </div>',
-            '  <p style="font-size:11px;color:#666;">Responds to player chat + talks on spawn/death. 20s cooldown.</p>',
+            '  <p style="font-size:11px;color:#666;">Uses Pollinations.ai (free, no account). Falls back to local phrases if offline. 20s cooldown.</p>',
             '</div>',
             '',
             '<div class="section">',
@@ -1813,11 +1764,11 @@
             updateGUI();
         });
 
-        // Bot iframe button (only in top window)
+        // Bot window button (only in top window)
         if (!isInsideIframe) {
-            document.getElementById("btn-create-iframe").addEventListener("click", function() {
-                window.createBotIframe();
-                setStatus("Created bot iframe");
+            document.getElementById("btn-create-bot").addEventListener("click", function() {
+                var bot = window.createBotWindow();
+                if (bot) setStatus("Opened bot window #" + (bot.index + 1) + " | " + bot.proxy);
             });
         }
 
@@ -1884,22 +1835,6 @@
             });
         }
 
-        var geminiKeyInput = document.getElementById("gemini-key");
-        if (geminiKeyInput) {
-            geminiKeyInput.addEventListener("change", function() {
-                var val = this.value.trim();
-                if (val && val !== "••••••••") {
-                    geminiApiKey = val;
-                    localStorage.setItem("arras-afk-gemini-key", geminiApiKey);
-                    this.value = "••••••••";
-                    var statusEl = document.getElementById("chatbot-status");
-                    if (statusEl) statusEl.textContent = "Key saved!";
-                }
-            });
-            geminiKeyInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
-            geminiKeyInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
-        }
-
         var personalityInput = document.getElementById("chatbot-personality");
         if (personalityInput) {
             personalityInput.addEventListener("change", function() {
@@ -1914,17 +1849,14 @@
         if (testChatBtn) {
             testChatBtn.addEventListener("click", async function() {
                 var statusEl = document.getElementById("chatbot-status");
-                if (!geminiApiKey) {
-                    if (statusEl) statusEl.textContent = "No API key!";
-                    return;
-                }
                 if (statusEl) statusEl.textContent = "Testing...";
-                var reply = await callGemini(chatbotPersonality + "\n\nSay a short greeting for an arras.io game (under 40 chars). Just the message, no quotes.");
+                var prompt = chatbotPersonality + "\n\nSay a short greeting for an arras.io game (under 40 chars). Just the message, no quotes, no explanation.";
+                var reply = await getAIResponse(prompt, "spawn");
                 if (reply) {
                     if (statusEl) statusEl.textContent = "OK: " + reply;
                     await sendGameChat(reply);
                 } else {
-                    if (statusEl) statusEl.textContent = "API error - check key";
+                    if (statusEl) statusEl.textContent = "Error - using local phrases";
                 }
             });
         }
@@ -2093,25 +2025,9 @@
         updateGUI();
         lastCanvasActivity = Date.now();
 
-        // Restore bot instances from localStorage (only in top window)
-        if (!isInsideIframe) {
-            try {
-                var savedBots = localStorage.getItem("arras-afk-bots");
-                if (savedBots) {
-                    var botData = JSON.parse(savedBots);
-                    for (var i = 0; i < botData.length; i++) {
-                        var bot = createBotIframe();
-                        if (botData[i].width && botData[i].height) {
-                            bot.container.style.width = botData[i].width + "px";
-                            bot.container.style.height = botData[i].height + "px";
-                        }
-                    }
-                    console.log("[AFK Bot] Restored " + botData.length + " bot instances");
-                }
-            } catch(e) {
-                console.log("[AFK Bot] Could not restore bots:", e);
-            }
-        }
+        // Note: Bot windows are NOT auto-restored on reload (can't reopen
+        // closed windows without user gesture). User clicks "+ Open Bot Window" manually.
+        // The bot list will show previously saved bots as "closed" state.
 
         // Main movement loop
         setInterval(fluidMovementLoop, 50);
