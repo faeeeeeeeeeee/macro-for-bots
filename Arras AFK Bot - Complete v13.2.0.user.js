@@ -1453,12 +1453,12 @@
         if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH) {
             return reply;
         }
-        // Don't force a response — just stay silent if AI fails
-        // Only use fallback ~20% of the time so the bot isn't constantly talking
-        if (Math.random() < 0.2) {
+        // Don't always force a response — respond ~50% of the time if AI fails
+        if (Math.random() < 0.5) {
+            console.log("[AFK Bot] AI failed, using fallback phrase");
             return getLocalPhrase(fallbackCategory || "respond");
         }
-        console.log("[AFK Bot] AI failed, staying silent");
+        console.log("[AFK Bot] AI failed, staying silent this time");
         return null;
     }
 
