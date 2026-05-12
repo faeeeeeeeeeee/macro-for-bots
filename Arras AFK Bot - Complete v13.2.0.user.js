@@ -1148,6 +1148,7 @@
         "You are a playful arras.io tank player. Keep responses under 60 characters. Be funny, witty, and use gaming slang. Never use profanity.";
     var CHATBOT_COOLDOWN = 5000;   // Min ms between chat messages (5 seconds)
     var CHATBOT_MAX_LENGTH = 60;   // Max characters per chat message
+    var CHATBOT_NAME = "fried bot"; // Bot responds when someone says this name
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1248,8 +1249,9 @@
             detectedChatMessages.push({ text: text, time: now });
             if (detectedChatMessages.length > 10) detectedChatMessages.shift();
 
-            // Respond if chatbot is enabled and cooldown has passed
-            if (chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
+            // Only respond if someone says the bot's name
+            if (chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN &&
+                text.toLowerCase().indexOf(CHATBOT_NAME) !== -1) {
                 respondToChat(text);
             }
         }, 500);
