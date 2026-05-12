@@ -1447,14 +1447,19 @@
         return phrases[Math.floor(Math.random() * phrases.length)];
     }
 
-    // Get AI response — tries Pollinations first, falls back to local phrases
+    // Get AI response — tries Pollinations, stays silent if it fails (no forced fallback)
     async function getAIResponse(prompt, fallbackCategory) {
         var reply = await callPollinations(prompt);
         if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH) {
             return reply;
         }
-        // Fallback to local phrase bank
-        return getLocalPhrase(fallbackCategory || "respond");
+        // Don't force a response — just stay silent if AI fails
+        // Only use fallback ~20% of the time so the bot isn't constantly talking
+        if (Math.random() < 0.2) {
+            return getLocalPhrase(fallbackCategory || "respond");
+        }
+        console.log("[AFK Bot] AI failed, staying silent");
+        return null;
     }
 
     // Respond to a detected chat message
