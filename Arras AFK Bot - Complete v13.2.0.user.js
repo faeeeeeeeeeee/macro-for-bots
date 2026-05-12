@@ -1149,8 +1149,29 @@
     var CHATBOT_COOLDOWN = 5000;   // Min ms between chat messages (5 seconds)
     var CHATBOT_MAX_LENGTH = 60;   // Max characters per chat message
     var CHATBOT_TRIGGERS = ["fried bot", "clanker", "bot", "fried", "robot", "ai"]; // Bot responds to these keywords
+    // Context clues: patterns that suggest someone is talking TO the bot
+    // These trigger a response even without the bot's exact name
+    var CHATBOT_CONTEXT_PATTERNS = [
+        /are you (a |the )?bot/i,           // "are you a bot?"
+        /are you real/i,                     // "are you real?"
+        /you (a |the )?bot/i,               // "you a bot"
+        /say something/i,                    // "say something"
+        /can you (talk|speak|chat|type)/i,  // "can you talk?"
+        /hello\?/i,                          // "hello?"
+        /anyone there/i,                     // "anyone there?"
+        /you alive/i,                        // "you alive?"
+        /stop (moving|spinning|shooting)/i, // "stop moving"
+        /hey (you|tank|dude|bro)/i,         // "hey you", "hey tank"
+        /yo (you|tank)/i,                    // "yo tank"
+        /what are you/i,                     // "what are you"
+        /prove.*(not|you).*(bot|human)/i,   // "prove you're not a bot"
+        /talk to me/i,                       // "talk to me"
+        /respond/i,                          // "respond"
+        /answer me/i                         // "answer me"
+    ];
     var CHATBOT_RESPONSE_DELAY_MSGS = 2; // Wait this many more chat messages before responding
     var pendingTrigger = null; // Stores the trigger message waiting for delay
+    var lastBotChatTime = 0; // Track when bot last chatted (for reply detection)
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1251,20 +1272,41 @@
             detectedChatMessages.push({ text: text, time: now });
             if (detectedChatMessages.length > 10) detectedChatMessages.shift();
 
-            // Check if message contains any trigger keyword
+            // Check if message triggers a response via keywords, context, or reply
             var lowerMsg = text.toLowerCase();
             var triggered = false;
+            var triggerReason = "";
+
+            // 1. Direct keyword triggers
             for (var ti = 0; ti < CHATBOT_TRIGGERS.length; ti++) {
                 if (lowerMsg.indexOf(CHATBOT_TRIGGERS[ti]) !== -1) {
                     triggered = true;
+                    triggerReason = "keyword: " + CHATBOT_TRIGGERS[ti];
                     break;
                 }
+            }
+
+            // 2. Context clue patterns (someone talking TO the bot)
+            if (!triggered) {
+                for (var ci = 0; ci < CHATBOT_CONTEXT_PATTERNS.length; ci++) {
+                    if (CHATBOT_CONTEXT_PATTERNS[ci].test(text)) {
+                        triggered = true;
+                        triggerReason = "context: " + CHATBOT_CONTEXT_PATTERNS[ci].source;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Reply detection: if someone chats within 10s after bot spoke, they might be replying
+            if (!triggered && lastBotChatTime > 0 && (Date.now() - lastBotChatTime < 10000)) {
+                triggered = true;
+                triggerReason = "reply (within 10s of bot's last message)";
             }
 
             if (triggered && chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
                 // Don't respond immediately — wait for a few more messages first
                 pendingTrigger = { text: text, msgsToWait: CHATBOT_RESPONSE_DELAY_MSGS };
-                console.log("[AFK Bot] Triggered! Waiting " + CHATBOT_RESPONSE_DELAY_MSGS + " more messages before responding");
+                console.log("[AFK Bot] Triggered (" + triggerReason + ")! Waiting " + CHATBOT_RESPONSE_DELAY_MSGS + " more messages");
             } else if (pendingTrigger && !triggered) {
                 // Count down messages (excluding own messages already filtered)
                 pendingTrigger.msgsToWait--;
@@ -1292,6 +1334,7 @@
 
         // Store own message so we don't respond to our own chat bubble
         ownSentMessages[message] = Date.now();
+        lastBotChatTime = Date.now(); // Track for reply detection
         // Clean old entries
         for (var key in ownSentMessages) {
             if (Date.now() - ownSentMessages[key] > 15000) delete ownSentMessages[key];
