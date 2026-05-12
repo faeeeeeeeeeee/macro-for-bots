@@ -33,6 +33,7 @@
     // ║  [SECTION: MOVEMENT-CFG]   - Movement config (roam, summon, etc.)   ║
     // ║  [SECTION: DEATH-DETECT]   - Death detection & auto-respawn         ║
     // ║  [SECTION: BUILD-SEQ]      - Post-respawn build sequence            ║
+    // ║  [SECTION: AI-CHATBOT]    - Gemini AI chatbot (auto-chat in game)  ║
     // ║  [SECTION: MOVEMENT]       - Movement directions & fluid movement   ║
     // ║  [SECTION: WALL-DETECT]    - Wall detection & avoidance             ║
     // ║  [SECTION: GUI-HTML]       - GUI panel HTML & CSS                   ║
@@ -378,6 +379,11 @@
                 await delay(200);
                 runBuildSequence();
             })();
+        }
+
+        // Detect chat messages for AI chatbot
+        if (chatbotEnabled && isChatMessage(text)) {
+            onChatDetected(text);
         }
 
         // Detect "DISCONNECT" state
@@ -1167,6 +1173,188 @@
         } else {
             setStatus("Idle (respawn active)");
         }
+
+        // AI Chatbot: say something on spawn
+        if (chatbotEnabled && respawnCount > 0) {
+            setTimeout(function() { chatOnEvent("just respawned after dying"); }, 3000);
+        } else if (chatbotEnabled && respawnCount === 0) {
+            setTimeout(function() { chatOnEvent("just joined the game"); }, 3000);
+        }
+    }
+
+    // =========================================================================
+    // [SECTION: AI-CHATBOT] Gemini AI Chatbot
+    // Reads in-game chat messages and responds using Google Gemini API.
+    // Also sends contextual messages on events (spawn, death, etc.).
+    //
+    // HOW TO SET UP:
+    //   1. Get a free API key at https://aistudio.google.com/app/apikey
+    //   2. Open the bot panel (ESC) and paste your key in the AI Chatbot section
+    //   3. Toggle the chatbot on
+    //
+    // HOW TO CUSTOMIZE:
+    //   - Change the personality prompt in the GUI text field
+    //   - Adjust CHATBOT_COOLDOWN to change how often it talks (ms)
+    //   - Adjust CHATBOT_MAX_LENGTH for message length limit
+    // =========================================================================
+    var chatbotEnabled = (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
+    var geminiApiKey = localStorage.getItem("arras-afk-gemini-key") || "";
+    var chatbotPersonality = localStorage.getItem("arras-afk-chatbot-personality") ||
+        "You are a playful arras.io tank player. Keep responses under 40 characters. Be funny, witty, and use gaming slang. Never use profanity.";
+    var CHATBOT_COOLDOWN = 20000;  // Min ms between chat messages (game has anti-spam)
+    var CHATBOT_MAX_LENGTH = 40;   // Max characters per chat message
+    var lastChatTime = 0;
+    var chatHistory = [];          // Recent messages for context
+    var detectedChatMessages = []; // Chat messages seen on canvas
+    var lastDetectedChats = {};    // Dedup: text -> timestamp
+    var chatbotReady = false;      // True once in-game
+
+    // Known non-chat text patterns to filter out
+    var CHAT_IGNORE_PATTERNS = [
+        /^coordinates:/i, /^score:/i, /^level\s/i, /^\d+$/, /^\d+\.\d+$/,
+        /^play$/i, /^respawn$/i, /^disconnect/i, /^connecting/i,
+        /^press/i, /^use\s/i, /^auto/i, /^game\sover/i, /^you\s/i,
+        /^\(.*\)$/, /^[A-Z]{1,3}$/, /^[\d\s\/\.\,\-\+]+$/,
+        /^arena\s/i, /^ffa$/i, /^maze$/i, /^teams?$/i, /^sandbox$/i
+    ];
+
+    // Detect chat messages from canvas text
+    // Chat bubbles are short text strings that don't match game UI patterns
+    function isChatMessage(text) {
+        if (!text || text.length < 2 || text.length > 60) return false;
+        for (var i = 0; i < CHAT_IGNORE_PATTERNS.length; i++) {
+            if (CHAT_IGNORE_PATTERNS[i].test(text)) return false;
+        }
+        // Must contain at least one letter
+        if (!/[a-zA-Z]/.test(text)) return false;
+        return true;
+    }
+
+    function onChatDetected(text) {
+        var now = Date.now();
+        // Dedup: same text within 2 seconds is a re-render
+        if (lastDetectedChats[text] && now - lastDetectedChats[text] < 2000) return;
+        lastDetectedChats[text] = now;
+
+        // Clean old dedup entries
+        for (var key in lastDetectedChats) {
+            if (now - lastDetectedChats[key] > 5000) delete lastDetectedChats[key];
+        }
+
+        console.log("[AFK Bot] Chat detected: " + text);
+        detectedChatMessages.push({ text: text, time: now });
+        // Keep only last 10 messages
+        if (detectedChatMessages.length > 10) detectedChatMessages.shift();
+
+        // Respond if chatbot is enabled and cooldown has passed
+        if (chatbotEnabled && geminiApiKey && now - lastChatTime > CHATBOT_COOLDOWN) {
+            respondToChat(text);
+        }
+    }
+
+    // Send a chat message in-game by simulating keypresses
+    async function sendGameChat(message) {
+        if (!message || buildSequenceRunning) return;
+        message = message.substring(0, CHATBOT_MAX_LENGTH);
+        lastChatTime = Date.now();
+
+        console.log("[AFK Bot] Sending chat: " + message);
+
+        // Press Enter to open chat
+        var enterDown = new KeyboardEvent("keydown", {
+            key: "Enter", code: "Enter", keyCode: 13, which: 13,
+            bubbles: true, cancelable: true
+        });
+        var enterUp = new KeyboardEvent("keyup", {
+            key: "Enter", code: "Enter", keyCode: 13, which: 13,
+            bubbles: true, cancelable: true
+        });
+        document.dispatchEvent(enterDown);
+        document.dispatchEvent(enterUp);
+        await delay(300);
+
+        // Type each character
+        for (var i = 0; i < message.length; i++) {
+            var ch = message[i];
+            var keyCode = ch.charCodeAt(0);
+            document.dispatchEvent(new KeyboardEvent("keydown", {
+                key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
+                bubbles: true, cancelable: true
+            }));
+            document.dispatchEvent(new KeyboardEvent("keypress", {
+                key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
+                charCode: keyCode, bubbles: true, cancelable: true
+            }));
+            document.dispatchEvent(new KeyboardEvent("keyup", {
+                key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
+                bubbles: true, cancelable: true
+            }));
+            await delay(25);
+        }
+
+        // Press Enter to send
+        await delay(100);
+        document.dispatchEvent(enterDown);
+        document.dispatchEvent(enterUp);
+    }
+
+    // Call Gemini API
+    async function callGemini(prompt) {
+        if (!geminiApiKey) return null;
+        try {
+            var response = await fetch(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            maxOutputTokens: 30,
+                            temperature: 0.9
+                        }
+                    })
+                }
+            );
+            var data = await response.json();
+            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                var text = data.candidates[0].content.parts[0].text;
+                return text.trim().replace(/[\n\r]/g, " ").substring(0, CHATBOT_MAX_LENGTH);
+            }
+        } catch (e) {
+            console.log("[AFK Bot] Gemini API error:", e);
+        }
+        return null;
+    }
+
+    // Respond to a detected chat message
+    async function respondToChat(incomingText) {
+        var prompt = chatbotPersonality + "\n\n" +
+            "Someone in the game said: \"" + incomingText + "\"\n" +
+            "Reply with a short in-game chat message (under " + CHATBOT_MAX_LENGTH + " characters). " +
+            "Just the message text, no quotes.";
+        var reply = await callGemini(prompt);
+        if (reply) {
+            await sendGameChat(reply);
+        }
+    }
+
+    // Generate a contextual message for game events
+    async function chatOnEvent(eventType) {
+        if (!chatbotEnabled || !geminiApiKey) return;
+        var now = Date.now();
+        if (now - lastChatTime < CHATBOT_COOLDOWN) return;
+
+        var tankName = tankUpgrades[selectedTankUpgrade] ? tankUpgrades[selectedTankUpgrade].name : "Basic";
+        var prompt = chatbotPersonality + "\n\n" +
+            "You are playing arras.io as a " + tankName + " tank. " +
+            "Event: " + eventType + ". " +
+            "Send a short chat message (under " + CHATBOT_MAX_LENGTH + " characters). " +
+            "Just the message text, no quotes.";
+        var reply = await callGemini(prompt);
+        if (reply) {
+            await sendGameChat(reply);
+        }
     }
 
     // =========================================================================
@@ -1538,6 +1726,27 @@
             ].join('\n')),
             '',
             '<div class="section">',
+            '  <h3>AI Chatbot (Gemini)</h3>',
+            '  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">',
+            '    <label style="color:#ccc;font-size:13px;">Enable</label>',
+            '    <input type="checkbox" id="chatbot-toggle" ' + (chatbotEnabled ? 'checked' : '') + '>',
+            '  </div>',
+            '  <div style="margin-bottom:8px;">',
+            '    <label style="color:#888;font-size:11px;">Gemini API Key (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#4caf50;">get free key</a>)</label>',
+            '    <input type="password" id="gemini-key" placeholder="Paste API key here..." value="' + (geminiApiKey ? '••••••••' : '') + '" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:12px;">',
+            '  </div>',
+            '  <div style="margin-bottom:8px;">',
+            '    <label style="color:#888;font-size:11px;">Personality Prompt</label>',
+            '    <textarea id="chatbot-personality" rows="3" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;resize:vertical;">' + chatbotPersonality.replace(/'/g, "&#39;") + '</textarea>',
+            '  </div>',
+            '  <div style="margin-bottom:4px;">',
+            '    <button id="btn-test-chat" class="btn btn-summon" style="font-size:11px;padding:4px 12px;">Test Chat</button>',
+            '    <span id="chatbot-status" style="color:#888;font-size:11px;margin-left:8px;"></span>',
+            '  </div>',
+            '  <p style="font-size:11px;color:#666;">Responds to player chat + talks on spawn/death. 20s cooldown.</p>',
+            '</div>',
+            '',
+            '<div class="section">',
             '  <h3>Roaming Control</h3>',
             '  <div class="slider-row">',
             '    <span class="slider-label">Roam Distance</span>',
@@ -1661,6 +1870,62 @@
                 ROAM_BIAS_MULTIPLIER = parseFloat(this.value);
                 var valueEl = document.getElementById("roam-value");
                 if (valueEl) valueEl.textContent = ROAM_BIAS_MULTIPLIER.toFixed(1) + "x";
+            });
+        }
+
+        // AI Chatbot controls
+        var chatbotToggle = document.getElementById("chatbot-toggle");
+        if (chatbotToggle) {
+            chatbotToggle.addEventListener("change", function() {
+                chatbotEnabled = this.checked;
+                localStorage.setItem("arras-afk-chatbot-enabled", chatbotEnabled ? "1" : "0");
+                var statusEl = document.getElementById("chatbot-status");
+                if (statusEl) statusEl.textContent = chatbotEnabled ? "Active" : "Off";
+            });
+        }
+
+        var geminiKeyInput = document.getElementById("gemini-key");
+        if (geminiKeyInput) {
+            geminiKeyInput.addEventListener("change", function() {
+                var val = this.value.trim();
+                if (val && val !== "••••••••") {
+                    geminiApiKey = val;
+                    localStorage.setItem("arras-afk-gemini-key", geminiApiKey);
+                    this.value = "••••••••";
+                    var statusEl = document.getElementById("chatbot-status");
+                    if (statusEl) statusEl.textContent = "Key saved!";
+                }
+            });
+            geminiKeyInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            geminiKeyInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
+        }
+
+        var personalityInput = document.getElementById("chatbot-personality");
+        if (personalityInput) {
+            personalityInput.addEventListener("change", function() {
+                chatbotPersonality = this.value.trim();
+                localStorage.setItem("arras-afk-chatbot-personality", chatbotPersonality);
+            });
+            personalityInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            personalityInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
+        }
+
+        var testChatBtn = document.getElementById("btn-test-chat");
+        if (testChatBtn) {
+            testChatBtn.addEventListener("click", async function() {
+                var statusEl = document.getElementById("chatbot-status");
+                if (!geminiApiKey) {
+                    if (statusEl) statusEl.textContent = "No API key!";
+                    return;
+                }
+                if (statusEl) statusEl.textContent = "Testing...";
+                var reply = await callGemini(chatbotPersonality + "\n\nSay a short greeting for an arras.io game (under 40 chars). Just the message, no quotes.");
+                if (reply) {
+                    if (statusEl) statusEl.textContent = "OK: " + reply;
+                    await sendGameChat(reply);
+                } else {
+                    if (statusEl) statusEl.textContent = "API error - check key";
+                }
             });
         }
 
