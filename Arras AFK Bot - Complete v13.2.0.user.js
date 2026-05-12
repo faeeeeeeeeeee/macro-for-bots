@@ -4,8 +4,7 @@
 // @version      13.2.0
 // @description  Full AFK bot with fluid movement, smart wall navigation, auto-reconnect, AND iframe bot instances (no separate windows!)
 // @match        *://arras.io/*
-// @grant        GM_xmlhttpRequest
-// @connect      text.pollinations.ai
+// @grant        none
 // @run-at       document-start
 // ==/UserScript==
 
@@ -1406,46 +1405,39 @@
     }
 
     // Call Pollinations.ai (free, no API key needed)
-    // Uses GM_xmlhttpRequest to bypass CORS (fetch gets blocked from arras.io)
-    function callPollinations(prompt) {
-        return new Promise(function(resolve) {
-            var timedOut = false;
-            var timer = setTimeout(function() {
-                timedOut = true;
+    async function callPollinations(prompt) {
+        try {
+            var url = "https://text.pollinations.ai/" + encodeURIComponent(prompt);
+            console.log("[AFK Bot] Calling Pollinations...");
+            // 15-second timeout
+            var controller = new AbortController();
+            var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
+            var response = await fetch(url, { method: "GET", signal: controller.signal });
+            clearTimeout(timeoutId);
+            console.log("[AFK Bot] Pollinations status: " + response.status);
+            if (response.ok) {
+                var text = await response.text();
+                console.log("[AFK Bot] Pollinations raw: " + text.substring(0, 80));
+                text = text.trim().replace(/[\n\r"]/g, " ");
+                // Sanitize: reject responses that look like debug/render output
+                if (/render\s*[:(\[]/i.test(text)) { console.log("[AFK Bot] Rejected: render pattern"); return null; }
+                if (/^[\{\[\(]/.test(text)) { console.log("[AFK Bot] Rejected: starts with bracket"); return null; }
+                if (/console\.|function\s|var\s|let\s|const\s/i.test(text)) { console.log("[AFK Bot] Rejected: code pattern"); return null; }
+                if (text.split("(").length > 2) { console.log("[AFK Bot] Rejected: too many parens"); return null; }
+                // Strip any leading metadata/prefix before actual message
+                text = text.replace(/^[^a-zA-Z]*/, "");
+                if (text.length < 2) { console.log("[AFK Bot] Rejected: too short after strip"); return null; }
+                console.log("[AFK Bot] Pollinations reply: " + text.substring(0, CHATBOT_MAX_LENGTH));
+                return text.substring(0, CHATBOT_MAX_LENGTH);
+            }
+        } catch (e) {
+            if (e.name === "AbortError") {
                 console.log("[AFK Bot] Pollinations timed out (15s)");
-                resolve(null);
-            }, 15000);
-
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: "https://text.pollinations.ai/" + encodeURIComponent(prompt),
-                onload: function(resp) {
-                    if (timedOut) return;
-                    clearTimeout(timer);
-                    if (resp.status === 200 && resp.responseText) {
-                        var text = resp.responseText.trim().replace(/[\n\r"]/g, " ");
-                        // Sanitize: reject responses that look like debug/render output
-                        if (/render\s*[:(\[]/i.test(text)) { resolve(null); return; }
-                        if (/^[\{\[\(]/.test(text)) { resolve(null); return; }
-                        if (/console\.|function\s|var\s|let\s|const\s/i.test(text)) { resolve(null); return; }
-                        if (text.split("(").length > 2) { resolve(null); return; }
-                        // Strip any leading metadata/prefix before actual message
-                        text = text.replace(/^[^a-zA-Z]*/, "");
-                        if (text.length < 2) { resolve(null); return; }
-                        resolve(text.substring(0, CHATBOT_MAX_LENGTH));
-                    } else {
-                        console.log("[AFK Bot] Pollinations returned status: " + resp.status);
-                        resolve(null);
-                    }
-                },
-                onerror: function(err) {
-                    if (timedOut) return;
-                    clearTimeout(timer);
-                    console.log("[AFK Bot] Pollinations error:", err);
-                    resolve(null);
-                }
-            });
-        });
+            } else {
+                console.log("[AFK Bot] Pollinations error: " + e.message);
+            }
+        }
+        return null;
     }
 
     // Get a random phrase from the local phrase bank (fallback)
