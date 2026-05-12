@@ -713,7 +713,9 @@
     // 3. KEY & MOUSE SIMULATION HELPERS
     // =========================================================================
     var activeKeys = {};
+    var blockAllKeys = false; // Global gate: blocks ALL simulateKey dispatches (used during chat)
     function simulateKey(code, keyName, pressed) {
+        if (blockAllKeys) return;
         if (activeKeys[code] === pressed) return;
         activeKeys[code] = pressed;
         var event = new KeyboardEvent(pressed ? "keydown" : "keyup", {
@@ -1145,9 +1147,9 @@
     // =========================================================================
     var chatbotEnabled = (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
     var chatbotPersonality = localStorage.getItem("arras-afk-chatbot-personality") ||
-        "You are a playful arras.io tank player. Keep responses under 40 characters. Be funny, witty, and use gaming slang. Never use profanity.";
+        "You are a playful arras.io tank player. Keep responses under 60 characters. Be funny, witty, and use gaming slang. Never use profanity.";
     var CHATBOT_COOLDOWN = 20000;  // Min ms between chat messages (game has anti-spam)
-    var CHATBOT_MAX_LENGTH = 40;   // Max characters per chat message
+    var CHATBOT_MAX_LENGTH = 60;   // Max characters per chat message
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1203,49 +1205,78 @@
     }
 
     // Send a chat message in-game by simulating keypresses
+    var isChatSending = false; // Flag to pause movement during chat
     async function sendGameChat(message) {
-        if (!message || buildSequenceRunning) return;
+        if (!message || buildSequenceRunning || isChatSending) return;
         message = message.substring(0, CHATBOT_MAX_LENGTH);
         lastChatTime = Date.now();
+        isChatSending = true;
+        blockAllKeys = true; // Block ALL simulateKey dispatches (movement, etc.)
 
         console.log("[AFK Bot] Sending chat: " + message);
 
-        // Press Enter to open chat
-        var enterDown = new KeyboardEvent("keydown", {
-            key: "Enter", code: "Enter", keyCode: 13, which: 13,
-            bubbles: true, cancelable: true
-        });
-        var enterUp = new KeyboardEvent("keyup", {
-            key: "Enter", code: "Enter", keyCode: 13, which: 13,
-            bubbles: true, cancelable: true
-        });
-        document.dispatchEvent(enterDown);
-        document.dispatchEvent(enterUp);
-        await delay(300);
+        // Release all held movement keys before we block
+        releaseAllMovement();
+        await delay(200);
 
-        // Type each character
-        for (var i = 0; i < message.length; i++) {
-            var ch = message[i];
-            var keyCode = ch.charCodeAt(0);
-            document.dispatchEvent(new KeyboardEvent("keydown", {
-                key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
-                bubbles: true, cancelable: true
-            }));
-            document.dispatchEvent(new KeyboardEvent("keypress", {
-                key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
-                charCode: keyCode, bubbles: true, cancelable: true
-            }));
-            document.dispatchEvent(new KeyboardEvent("keyup", {
-                key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
-                bubbles: true, cancelable: true
-            }));
-            await delay(25);
+        // Temporarily unblock for Enter press, then re-block
+        blockAllKeys = false;
+        await tapKey("Enter", "Enter", 50);
+        blockAllKeys = true;
+        await delay(400);
+
+        // Find the chat input element the game creates (body > input[type="text"])
+        var chatInput = document.querySelector("body > input[type='text']");
+        if (!chatInput) {
+            // Sometimes it takes a moment to appear
+            await delay(200);
+            chatInput = document.querySelector("body > input[type='text']");
         }
 
-        // Press Enter to send
-        await delay(100);
-        document.dispatchEvent(enterDown);
-        document.dispatchEvent(enterUp);
+        if (chatInput) {
+            // Direct value injection into the DOM input
+            chatInput.focus();
+            chatInput.value = message;
+            chatInput.dispatchEvent(new Event("input", { bubbles: true }));
+            await delay(150);
+
+            // Press Enter on the input to send (dispatch directly to the input)
+            var enterDown = new KeyboardEvent("keydown", {
+                key: "Enter", code: "Enter", keyCode: 13, which: 13,
+                bubbles: true, cancelable: true
+            });
+            var enterUp = new KeyboardEvent("keyup", {
+                key: "Enter", code: "Enter", keyCode: 13, which: 13,
+                bubbles: true, cancelable: true
+            });
+            chatInput.dispatchEvent(enterDown);
+            chatInput.dispatchEvent(enterUp);
+            await delay(200);
+        } else {
+            // Fallback: type via window keypresses if input not found
+            console.log("[AFK Bot] Chat input not found, trying keyboard fallback");
+            for (var i = 0; i < message.length; i++) {
+                var ch = message[i];
+                var keyCode = ch.charCodeAt(0);
+                window.dispatchEvent(new KeyboardEvent("keydown", {
+                    key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
+                    bubbles: true, cancelable: true
+                }));
+                window.dispatchEvent(new KeyboardEvent("keyup", {
+                    key: ch, code: "Key" + ch.toUpperCase(), keyCode: keyCode,
+                    bubbles: true, cancelable: true
+                }));
+                await delay(30);
+            }
+            await delay(150);
+            blockAllKeys = false;
+            await tapKey("Enter", "Enter", 50);
+            blockAllKeys = true;
+            await delay(200);
+        }
+
+        blockAllKeys = false;
+        isChatSending = false;
     }
 
     // Call Pollinations.ai (free, no API key needed)
@@ -1524,7 +1555,7 @@
     // 10. MAIN MOVEMENT LOOP (Fluid)
     // =========================================================================
     function fluidMovementLoop() {
-        if (!movementEnabled || buildSequenceRunning) return;
+        if (!movementEnabled || buildSequenceRunning || isChatSending) return;
 
         checkForWall();
 
