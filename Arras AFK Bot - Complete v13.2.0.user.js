@@ -1145,10 +1145,12 @@
     // =========================================================================
     var chatbotEnabled = (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
     var chatbotPersonality = localStorage.getItem("arras-afk-chatbot-personality") ||
-        "You are a playful arras.io tank player. Keep responses under 60 characters. Be funny, witty, and use gaming slang. Never use profanity.";
+        "You are a chill arras.io tank player. Keep responses under 60 characters. Be casual and natural, like a real player. No excessive slang. Never use profanity.";
     var CHATBOT_COOLDOWN = 5000;   // Min ms between chat messages (5 seconds)
     var CHATBOT_MAX_LENGTH = 60;   // Max characters per chat message
-    var CHATBOT_NAME = "fried bot"; // Bot responds when someone says this name
+    var CHATBOT_TRIGGERS = ["fried bot", "clanker", "bot", "fried", "robot", "ai"]; // Bot responds to these keywords
+    var CHATBOT_RESPONSE_DELAY_MSGS = 2; // Wait this many more chat messages before responding
+    var pendingTrigger = null; // Stores the trigger message waiting for delay
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1156,9 +1158,9 @@
 
     // Local phrase bank — used as fallback when Pollinations.ai is unavailable
     var CHAT_PHRASES = {
-        spawn: ["gg lets go", "im back baby", "round 2 fight", "here we go again", "miss me?", "back for more", "sup gamers", "the grind continues"],
-        death: ["oof", "bruh moment", "ill be back", "not even close", "lag killed me", "GG", "that was cheap", "respawning in style"],
-        respond: ["lol", "gg", "nice one", "fr fr", "true", "nah bro", "bet", "say less", "W take", "facts", "no cap", "sus", "cope", "ratio", "skill issue"]
+        spawn: ["here we go", "back again", "round 2", "lets go", "im back", "ready up", "alright", "back for more"],
+        death: ["oof", "gg", "ill be back", "not bad", "nice shot", "well played", "fair enough", "unlucky"],
+        respond: ["lol", "gg", "nice", "true", "yeah", "haha", "for real", "good one", "fair", "agreed", "same", "yep", "oh well", "interesting"]
     };
 
     // Known non-chat text patterns to filter out
@@ -1249,10 +1251,30 @@
             detectedChatMessages.push({ text: text, time: now });
             if (detectedChatMessages.length > 10) detectedChatMessages.shift();
 
-            // Only respond if someone says the bot's name
-            if (chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN &&
-                text.toLowerCase().indexOf(CHATBOT_NAME) !== -1) {
-                respondToChat(text);
+            // Check if message contains any trigger keyword
+            var lowerMsg = text.toLowerCase();
+            var triggered = false;
+            for (var ti = 0; ti < CHATBOT_TRIGGERS.length; ti++) {
+                if (lowerMsg.indexOf(CHATBOT_TRIGGERS[ti]) !== -1) {
+                    triggered = true;
+                    break;
+                }
+            }
+
+            if (triggered && chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
+                // Don't respond immediately — wait for a few more messages first
+                pendingTrigger = { text: text, msgsToWait: CHATBOT_RESPONSE_DELAY_MSGS };
+                console.log("[AFK Bot] Triggered! Waiting " + CHATBOT_RESPONSE_DELAY_MSGS + " more messages before responding");
+            } else if (pendingTrigger && !triggered) {
+                // Count down messages (excluding own messages already filtered)
+                pendingTrigger.msgsToWait--;
+                if (pendingTrigger.msgsToWait <= 0) {
+                    var triggerText = pendingTrigger.text;
+                    pendingTrigger = null;
+                    if (chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
+                        respondToChat(triggerText);
+                    }
+                }
             }
         }, 500);
     }
