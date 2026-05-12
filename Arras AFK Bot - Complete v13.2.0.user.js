@@ -1173,8 +1173,6 @@
         /^arena\s/i, /^ffa$/i, /^maze$/i, /^teams?$/i, /^sandbox$/i,
         // Player name labels: "Name - Class: Score" or "Name - Class: 123.4k/m/b"
         /\s-\s.+:\s*[\d\.]+[kmbt]?$/i,
-        // Score values with suffixes (64.01k, 290.0m, 1.5b, etc.)
-        /[\d\.]+[kmbt]$/i,
         // Player name with brackets like [φ [phi]] or [TAG]
         /\[.+\]/
     ];
