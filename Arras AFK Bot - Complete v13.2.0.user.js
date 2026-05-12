@@ -1434,9 +1434,15 @@
                     text = text.replace(/deprecated.*$/i, "").trim();
                     text = text.replace(/https?:\/\/[^\s]+/g, "").trim(); // strip URLs
                     text = text.replace(/\*\*/g, "").trim(); // strip markdown bold
-                    // Sanitize: reject responses that are API notices or code
+                    // Sanitize: reject responses that are API notices, errors, or code
                     if (/NOTICE|IMPORTANT|deprecated|legacy|api\s*key|endpoint|migrate/i.test(text)) {
                         console.log("[AFK Bot] Rejected: API notice"); return null;
+                    }
+                    if (/error\s*\d{3}|bad\s*gateway|service\s*unavailable|internal\s*server|not\s*found|forbidden|unauthorized|timeout/i.test(text)) {
+                        console.log("[AFK Bot] Rejected: HTTP error"); return null;
+                    }
+                    if (/<!doctype|<html|<head|<body/i.test(text)) {
+                        console.log("[AFK Bot] Rejected: HTML response"); return null;
                     }
                     if (/render\s*[:(\[]/i.test(text)) { console.log("[AFK Bot] Rejected: render pattern"); return null; }
                     if (/^[\{\[\(]/.test(text)) { console.log("[AFK Bot] Rejected: starts with bracket"); return null; }
