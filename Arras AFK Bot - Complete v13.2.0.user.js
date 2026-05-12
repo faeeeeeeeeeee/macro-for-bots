@@ -1125,12 +1125,7 @@
             setStatus("Idle (respawn active)");
         }
 
-        // AI Chatbot: say something on spawn
-        if (chatbotEnabled && respawnCount > 0) {
-            setTimeout(function() { chatOnEvent("just respawned after dying"); }, 3000);
-        } else if (chatbotEnabled && respawnCount === 0) {
-            setTimeout(function() { chatOnEvent("just joined the game"); }, 3000);
-        }
+        // AI Chatbot: no auto-chat on spawn — only responds when others chat
     }
 
     // =========================================================================
