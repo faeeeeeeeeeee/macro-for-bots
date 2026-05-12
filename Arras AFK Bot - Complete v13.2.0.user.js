@@ -1170,7 +1170,13 @@
         /^play$/i, /^respawn$/i, /^disconnect/i, /^connecting/i,
         /^press/i, /^use\s/i, /^auto/i, /^game\sover/i, /^you\s/i,
         /^\(.*\)$/, /^[A-Z]{1,3}$/, /^[\d\s\/\.\,\-\+]+$/,
-        /^arena\s/i, /^ffa$/i, /^maze$/i, /^teams?$/i, /^sandbox$/i
+        /^arena\s/i, /^ffa$/i, /^maze$/i, /^teams?$/i, /^sandbox$/i,
+        // Player name labels: "Name - Class: Score" or "Name - Class: 123.4k/m/b"
+        /\s-\s.+:\s*[\d\.]+[kmbt]?$/i,
+        // Score values with suffixes (64.01k, 290.0m, 1.5b, etc.)
+        /[\d\.]+[kmbt]$/i,
+        // Player name with brackets like [φ [phi]] or [TAG]
+        /\[.+\]/
     ];
 
     // Frequency tracker: tracks how often each text renders per second.
