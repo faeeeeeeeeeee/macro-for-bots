@@ -1349,12 +1349,12 @@
             if (triggered && chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
                 // Respond right away and enter conversation mode
                 inConversation = true;
-                // Reset conversation timeout — end conversation after 20s of no chat
+                // Reset conversation timeout — end conversation after 45s of no chat
                 if (conversationTimeout) clearTimeout(conversationTimeout);
                 conversationTimeout = setTimeout(function() {
                     inConversation = false;
-                    console.log("[AFK Bot] Conversation ended (20s no chat)");
-                }, 20000);
+                    console.log("[AFK Bot] Conversation ended (45s no chat)");
+                }, 45000);
                 console.log("[AFK Bot] Responding (" + triggerReason + ")");
                 respondToChat(text);
             }
