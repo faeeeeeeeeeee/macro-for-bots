@@ -1584,10 +1584,32 @@
         return phrases[Math.floor(Math.random() * phrases.length)];
     }
 
-    // Get AI response — tries Gemini, stays silent if it fails
+    // Blocked words/phrases — response gets silently dropped if it contains any of these
+    var BLOCKED_RESPONSE_WORDS = [
+        "crack me", "crack you", "breed", "moan", "daddy", "mommy",
+        "sexy", "horny", "fuck", "shit", "dick", "cock", "pussy",
+        "cum", "orgasm", "naked", "nude", "undress", "strip",
+        "suck", "blow me", "touch me", "kiss me", "lick",
+        "sex", "porn", "nsfw", "boner", "erect",
+        "ass", "boob", "tit", "slut", "whore"
+    ];
+
+    function isResponseAppropriate(text) {
+        var lower = text.toLowerCase();
+        for (var i = 0; i < BLOCKED_RESPONSE_WORDS.length; i++) {
+            if (lower.indexOf(BLOCKED_RESPONSE_WORDS[i]) !== -1) {
+                console.log("[AFK Bot] Blocked inappropriate response: " + text);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Get AI response — tries Gemini, stays silent if it fails or is inappropriate
     async function getAIResponse(prompt) {
         var reply = await callGemini(prompt);
         if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH + 10) {
+            if (!isResponseAppropriate(reply)) return null;
             return reply;
         }
         console.log("[AFK Bot] AI failed, staying silent");
@@ -1599,7 +1621,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = "You're a chill player in arras.io, a 2D tank shooter game. Someone in game chat said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. If you don't understand, ask what they mean. Just the reply, nothing else.";
+        var prompt = "You're a chill player in arras.io, a 2D tank shooter game. Someone in game chat said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. Keep it PG - mild banter is fine but nothing sexual or explicit. If you don't understand, ask what they mean. Just the reply, nothing else.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
