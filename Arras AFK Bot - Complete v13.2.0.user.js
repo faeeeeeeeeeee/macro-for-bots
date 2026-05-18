@@ -1621,7 +1621,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = "You're a bot playing arras.io, a 2D tank shooter game. You know you're a bot and you're proud of it. Your name is Fried Bot. Someone in game chat said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. Keep it PG - mild banter is fine but nothing sexual or explicit. If you don't understand, ask what they mean. Just the reply, nothing else.";
+        var prompt = "You're a bot in arras.io, a 2D tank shooter game. Someone in game chat said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. Keep it PG - mild banter is fine but nothing sexual or explicit. If you don't understand, ask what they mean. Just the reply, nothing else.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
