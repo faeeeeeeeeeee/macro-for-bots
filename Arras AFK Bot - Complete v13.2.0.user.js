@@ -1159,7 +1159,7 @@
         "You are a chill arras.io tank player. Keep responses under 60 characters. Be casual and natural, like a real player. No excessive slang. Never use profanity.";
     var geminiRateLimitUntil = 0;  // Timestamp when rate limit expires
     var CHATBOT_COOLDOWN = 5000;   // Min ms between chat messages (5 seconds)
-    var CHATBOT_MAX_LENGTH = 120;  // Max characters per AI response (split into 60-char game messages)
+    var CHATBOT_MAX_LENGTH = 180;  // Max characters per AI response (split into 60-char game messages, up to 3)
     var GAME_CHAT_LIMIT = 60;        // Game's per-message character limit
     var CHATBOT_TRIGGERS = ["fried bot", "clanker", "bot", "fried", "robot", "ai"]; // Bot responds to these keywords
     // Context clues: patterns that suggest someone is talking TO the bot
@@ -1555,7 +1555,7 @@
                 signal: controller.signal,
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { maxOutputTokens: 30, temperature: 0.9 }
+                    generationConfig: { maxOutputTokens: 60, temperature: 0.9 }
                 })
             });
             clearTimeout(timeoutId);
@@ -1632,7 +1632,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = "You're a bot in arras.io. Chat: \"" + incomingText + "\" Reply under 60 chars. Engage with what they said. No slang. Keep it PG. Just the reply.";
+        var prompt = "You're a bot in arras.io. Chat: \"" + incomingText + "\" Reply under 180 chars. Engage with what they said. No slang. Keep it PG. Just the reply.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
