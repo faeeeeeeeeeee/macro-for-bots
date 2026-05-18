@@ -1372,11 +1372,11 @@
                 }
             }
 
-            // 3. Conversation mode: if we're in a conversation, only respond to the same person
-            if (!triggered && inConversation) {
-                if (!conversationPartner || !speaker || speaker === conversationPartner) {
+            // 3. Conversation mode: only respond to the SAME identified person
+            if (!triggered && inConversation && conversationPartner && speaker) {
+                if (speaker === conversationPartner) {
                     triggered = true;
-                    triggerReason = "in conversation" + (conversationPartner ? " with " + conversationPartner : "");
+                    triggerReason = "in conversation with " + conversationPartner;
                 }
             }
 
@@ -1386,16 +1386,21 @@
                 triggerReason = "override: " + overrideRespondTo;
             }
 
-            // 4. Reply detection: if someone chats within 15s after bot spoke, they're replying
-            if (!triggered && lastBotChatTime > 0 && (Date.now() - lastBotChatTime < 15000)) {
+            // 4. Reply detection: only if we know who spoke and they're the same conversation partner
+            if (!triggered && lastBotChatTime > 0 && (Date.now() - lastBotChatTime < 15000) && speaker && conversationPartner && speaker === conversationPartner) {
                 triggered = true;
-                triggerReason = "reply (within 15s of bot's last message)";
+                triggerReason = "reply from " + speaker;
             }
 
             if (triggered && chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
                 // Respond right away and enter conversation mode
                 inConversation = true;
-                if (speaker) conversationPartner = speaker;
+                if (speaker) {
+                    conversationPartner = speaker;
+                } else if (!conversationPartner) {
+                    // Don't start conversations with unknown speakers
+                    // (unless triggered by keyword/context which is intentional)
+                }
                 // Reset conversation timeout — end conversation after 45s of no chat
                 if (conversationTimeout) clearTimeout(conversationTimeout);
                 conversationTimeout = setTimeout(function() {
@@ -1594,7 +1599,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = "You're a player in arras.io, a 2D tank shooter game where you shoot shapes, level up, and upgrade your tank. Someone in the game chat said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Keep responses about the game (tanks, upgrades, strategies, gameplay). Never flirt or be romantic. Never reference anything inappropriate. If you don't understand, ask what they mean. Just the reply.";
+        var prompt = "You're a chill player in arras.io, a 2D tank shooter game. Someone in game chat said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. If you don't understand, ask what they mean. Just the reply, nothing else.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
