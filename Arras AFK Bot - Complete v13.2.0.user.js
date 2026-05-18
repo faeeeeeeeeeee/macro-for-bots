@@ -1149,7 +1149,8 @@
         "You are a chill arras.io tank player. Keep responses under 60 characters. Be casual and natural, like a real player. No excessive slang. Never use profanity.";
     var geminiRateLimitUntil = 0;  // Timestamp when rate limit expires
     var CHATBOT_COOLDOWN = 5000;   // Min ms between chat messages (5 seconds)
-    var CHATBOT_MAX_LENGTH = 60;   // Max characters per chat message
+    var CHATBOT_MAX_LENGTH = 120;  // Max characters per AI response (split into 60-char game messages)
+    var GAME_CHAT_LIMIT = 60;        // Game's per-message character limit
     var CHATBOT_TRIGGERS = ["fried bot", "clanker", "bot", "fried", "robot", "ai"]; // Bot responds to these keywords
     // Context clues: patterns that suggest someone is talking TO the bot
     // These trigger a response even without the bot's exact name
@@ -1366,6 +1367,31 @@
     async function sendGameChat(message) {
         if (!message || buildSequenceRunning || isChatSending) return;
         message = message.substring(0, CHATBOT_MAX_LENGTH);
+
+        // Split into chunks of GAME_CHAT_LIMIT (60 chars), breaking at word boundaries
+        var chunks = [];
+        while (message.length > 0) {
+            if (message.length <= GAME_CHAT_LIMIT) {
+                chunks.push(message);
+                break;
+            }
+            // Find last space within the limit to break at a word
+            var breakAt = message.lastIndexOf(" ", GAME_CHAT_LIMIT);
+            if (breakAt < 20) breakAt = GAME_CHAT_LIMIT; // No good break point, hard cut
+            chunks.push(message.substring(0, breakAt).trim());
+            message = message.substring(breakAt).trim();
+        }
+
+        // Send each chunk as a separate game chat message
+        for (var ci = 0; ci < chunks.length; ci++) {
+            await sendSingleChat(chunks[ci]);
+            if (ci < chunks.length - 1) await delay(800); // Brief pause between parts
+        }
+    }
+
+    async function sendSingleChat(message) {
+        if (!message || buildSequenceRunning || isChatSending) return;
+        message = message.substring(0, GAME_CHAT_LIMIT);
         lastChatTime = Date.now();
         isChatSending = true;
         blockAllKeys = true; // Block ALL simulateKey dispatches (movement, etc.)
@@ -1466,7 +1492,7 @@
                 signal: controller.signal,
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { maxOutputTokens: 20, temperature: 0.9 }
+                    generationConfig: { maxOutputTokens: 60, temperature: 0.9 }
                 })
             });
             clearTimeout(timeoutId);
@@ -1509,7 +1535,7 @@
     // Get AI response — tries Gemini, stays silent if it fails
     async function getAIResponse(prompt) {
         var reply = await callGemini(prompt);
-        if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH) {
+        if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH + 10) {
             return reply;
         }
         console.log("[AFK Bot] AI failed, staying silent");
