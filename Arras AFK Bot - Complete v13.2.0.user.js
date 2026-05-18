@@ -1418,7 +1418,7 @@
             return null;
         }
         try {
-            var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey;
+            var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=" + geminiApiKey;
             console.log("[AFK Bot] Calling Gemini...");
             var controller = new AbortController();
             var timeoutId = setTimeout(function() { controller.abort(); }, 30000);
