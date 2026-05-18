@@ -1173,6 +1173,8 @@
     ];
     var inConversation = false; // True when bot is actively chatting with someone
     var conversationTimeout = null; // Timer to end conversation after inactivity
+    var chatDetectionReady = false; // False until startup delay passes
+    var scriptLoadTime = Date.now(); // When the script loaded
     var lastBotChatTime = 0; // Track when bot last chatted (for reply detection)
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
@@ -1276,6 +1278,12 @@
 
     function onChatDetected(text) {
         var now = Date.now();
+        // Ignore everything for the first 3 seconds after script loads
+        if (!chatDetectionReady) {
+            if (now - scriptLoadTime < 3000) return;
+            chatDetectionReady = true;
+            console.log("[AFK Bot] Chat detection ready (3s startup delay passed)");
+        }
         // Dedup: same text within 5 seconds is a re-render
         if (lastDetectedChats[text] && now - lastDetectedChats[text] < 5000) return;
         lastDetectedChats[text] = now;
