@@ -1548,7 +1548,7 @@
             var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" + geminiApiKey;
             console.log("[AFK Bot] Calling Gemini...");
             var controller = new AbortController();
-            var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
+            var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
             var response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1584,7 +1584,7 @@
                 console.log("[AFK Bot] Gemini status " + response.status + ": " + errText.substring(0, 100));
             }
         } catch (e) {
-            console.log("[AFK Bot] Gemini error: " + (e.name === "AbortError" ? "timed out 10s" : e.message));
+            console.log("[AFK Bot] Gemini error: " + (e.name === "AbortError" ? "timed out 15s" : e.message));
         }
         return null;
     }
