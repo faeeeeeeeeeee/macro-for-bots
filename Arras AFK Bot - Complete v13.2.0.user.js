@@ -1594,7 +1594,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = "You're a chill player in arras.io. Someone said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. If asked a question, answer it. No generic responses like 'okay' or 'hey'. Just the reply.";
+        var prompt = "You're a chill player in arras.io. Someone said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. If asked a question, answer it. No generic responses like 'okay' or 'hey'. Never flirt. Never be romantic or suggestive. Keep it casual and game-focused. Just the reply.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
