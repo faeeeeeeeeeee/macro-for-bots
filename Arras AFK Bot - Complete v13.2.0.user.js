@@ -1401,13 +1401,13 @@
                     // Don't start conversations with unknown speakers
                     // (unless triggered by keyword/context which is intentional)
                 }
-                // Reset conversation timeout — end conversation after 45s of no chat
+                // Reset conversation timeout — end conversation after 25s of no chat
                 if (conversationTimeout) clearTimeout(conversationTimeout);
                 conversationTimeout = setTimeout(function() {
                     inConversation = false;
                     conversationPartner = null;
-                    console.log("[AFK Bot] Conversation ended (45s no chat)");
-                }, 45000);
+                    console.log("[AFK Bot] Conversation ended (25s no chat)");
+                }, 25000);
                 console.log("[AFK Bot] Responding (" + triggerReason + ")");
                 respondToChat(text);
             }
