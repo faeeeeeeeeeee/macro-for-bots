@@ -1129,14 +1129,14 @@
     }
 
     // =========================================================================
-    // [SECTION: AI-CHATBOT] AI Chatbot (Pollinations.ai + Local Fallback)
-    // Reads in-game chat messages and responds using Pollinations.ai (free, no key).
-    // Falls back to local phrase bank if the API is unreachable.
-    // Also sends contextual messages on events (spawn, death, etc.).
+    // [SECTION: AI-CHATBOT] AI Chatbot (Google Gemini)
+    // Reads in-game chat messages and responds using Google Gemini API.
+    // Stays silent if the API is unreachable or rate-limited.
     //
     // HOW TO SET UP:
-    //   1. Open the bot panel (ESC)
-    //   2. Toggle the chatbot on — that's it! No API key needed.
+    //   1. Get a free Gemini API key: https://aistudio.google.com/app/apikey
+    //   2. Open the bot panel (ESC)
+    //   3. Paste the API key in the field and toggle on
     //
     // HOW TO CUSTOMIZE:
     //   - Change the personality prompt in the GUI text field
@@ -1144,8 +1144,10 @@
     //   - Adjust CHATBOT_MAX_LENGTH for message length limit
     // =========================================================================
     var chatbotEnabled = (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
+    var geminiApiKey = localStorage.getItem("arras-afk-gemini-key") || "";
     var chatbotPersonality = localStorage.getItem("arras-afk-chatbot-personality") ||
         "You are a chill arras.io tank player. Keep responses under 60 characters. Be casual and natural, like a real player. No excessive slang. Never use profanity.";
+    var geminiRateLimitUntil = 0;  // Timestamp when rate limit expires
     var CHATBOT_COOLDOWN = 5000;   // Min ms between chat messages (5 seconds)
     var CHATBOT_MAX_LENGTH = 60;   // Max characters per chat message
     var CHATBOT_TRIGGERS = ["fried bot", "clanker", "bot", "fried", "robot", "ai"]; // Bot responds to these keywords
@@ -1177,7 +1179,7 @@
     var lastDetectedChats = {};    // Dedup: text -> timestamp
     var ownSentMessages = {};      // Bot's own messages: text -> timestamp (ignore for 10s)
 
-    // Local phrase bank — used as fallback when Pollinations.ai is unavailable
+    // Local phrase bank — not currently used as fallback (bot stays silent on AI failure)
     var CHAT_PHRASES = {
         spawn: ["here we go", "back again", "round 2", "lets go", "im back", "ready up", "alright", "back for more"],
         death: ["oof", "gg", "ill be back", "not bad", "nice shot", "well played", "fair enough", "unlucky"],
@@ -1404,39 +1406,58 @@
         isChatSending = false;
     }
 
-    // Call Pollinations.ai directly (simple GET request)
-    async function callPollinations(prompt) {
+    // Call Google Gemini API
+    async function callGemini(prompt) {
+        if (!geminiApiKey) {
+            console.log("[AFK Bot] No Gemini API key set");
+            return null;
+        }
+        // Skip if rate-limited (wait 60 seconds after a 429)
+        if (Date.now() < geminiRateLimitUntil) {
+            console.log("[AFK Bot] Rate-limited, waiting " + Math.ceil((geminiRateLimitUntil - Date.now()) / 1000) + "s");
+            return null;
+        }
         try {
-            var url = "https://text.pollinations.ai/" + encodeURIComponent(prompt);
-            console.log("[AFK Bot] Calling Pollinations...");
+            var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + geminiApiKey;
+            console.log("[AFK Bot] Calling Gemini...");
             var controller = new AbortController();
-            var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
-            var response = await fetch(url, { method: "GET", signal: controller.signal });
+            var timeoutId = setTimeout(function() { controller.abort(); }, 30000);
+            var response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: controller.signal,
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { maxOutputTokens: 40, temperature: 0.9 }
+                })
+            });
             clearTimeout(timeoutId);
+            if (response.status === 429) {
+                console.log("[AFK Bot] Gemini rate limited! Pausing for 60s");
+                geminiRateLimitUntil = Date.now() + 60000;
+                return null;
+            }
             if (response.ok) {
-                var text = await response.text();
-                console.log("[AFK Bot] AI raw: " + text.substring(0, 100));
-                text = text.trim().replace(/[\n\r"]/g, " ");
-                // Strip obvious garbage: API notices, URLs, markdown
-                text = text.replace(/\*?\*?IMPORTANT\s*NOTICE\*?\*?.*/i, "").trim();
-                text = text.replace(/https?:\/\/[^\s]+/g, "").trim();
-                text = text.replace(/\*\*/g, "").trim();
-                // Reject if it's clearly not a chat message
-                if (/NOTICE|IMPORTANT|deprecated|legacy|endpoint|migrate/i.test(text)) return null;
-                if (/error\s*\d{3}|bad\s*gateway|service\s*unavailable/i.test(text)) return null;
-                if (/<!doctype|<html|<head/i.test(text)) return null;
+                var data = await response.json();
+                var text = "";
+                if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                    text = data.candidates[0].content.parts[0].text || "";
+                }
+                text = text.trim().replace(/[\n\r"]/g, " ").replace(/\*\*/g, "").trim();
+                console.log("[AFK Bot] Gemini raw: " + text.substring(0, 100));
                 if (text.length < 2 || text.length > 200) return null;
-                // Take just the first sentence/line if it's long
+                // Take first sentence if too long
                 var firstLine = text.split(/[.!?]\s/)[0];
                 if (firstLine.length > CHATBOT_MAX_LENGTH) firstLine = firstLine.substring(0, CHATBOT_MAX_LENGTH);
                 if (firstLine.length < 2) return null;
-                console.log("[AFK Bot] AI reply: " + firstLine);
+                console.log("[AFK Bot] Gemini reply: " + firstLine);
                 return firstLine;
             } else {
-                console.log("[AFK Bot] Pollinations status: " + response.status);
+                var errText = await response.text();
+                console.log("[AFK Bot] Gemini status " + response.status + ": " + errText.substring(0, 100));
             }
         } catch (e) {
-            console.log("[AFK Bot] Pollinations error: " + (e.name === "AbortError" ? "timed out 15s" : e.message));
+            console.log("[AFK Bot] Gemini error: " + (e.name === "AbortError" ? "timed out 30s" : e.message));
         }
         return null;
     }
@@ -1447,9 +1468,9 @@
         return phrases[Math.floor(Math.random() * phrases.length)];
     }
 
-    // Get AI response — tries Pollinations, stays silent if it fails
+    // Get AI response — tries Gemini, stays silent if it fails
     async function getAIResponse(prompt) {
-        var reply = await callPollinations(prompt);
+        var reply = await callGemini(prompt);
         if (reply && reply.length > 1 && reply.length <= CHATBOT_MAX_LENGTH) {
             return reply;
         }
@@ -1462,8 +1483,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        // Ultra-short prompt for speed
-        var prompt = "You are in arras.io. Reply under " + CHATBOT_MAX_LENGTH + " chars to: " + incomingText;
+        var prompt = chatbotPersonality + " Someone said: \"" + incomingText + "\" Reply in under " + CHATBOT_MAX_LENGTH + " characters. Just the reply, no quotes.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
@@ -1861,10 +1881,14 @@
             ].join('\n')),
             '',
             '<div class="section">',
-            '  <h3>AI Chatbot (Free - No Key)</h3>',
+            '  <h3>AI Chatbot (Gemini)</h3>',
             '  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">',
             '    <label style="color:#ccc;font-size:13px;">Enable</label>',
             '    <input type="checkbox" id="chatbot-toggle" ' + (chatbotEnabled ? 'checked' : '') + '>',
+            '  </div>',
+            '  <div style="margin-bottom:8px;">',
+            '    <label style="color:#888;font-size:11px;">Gemini API Key (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#4fc3f7;">Get one free</a>)</label>',
+            '    <input type="password" id="gemini-key" value="' + geminiApiKey + '" placeholder="Paste API key here" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;">',
             '  </div>',
             '  <div style="margin-bottom:8px;">',
             '    <label style="color:#888;font-size:11px;">Personality Prompt</label>',
@@ -1874,7 +1898,7 @@
             '    <button id="btn-test-chat" class="btn btn-summon" style="font-size:11px;padding:4px 12px;">Test Chat</button>',
             '    <span id="chatbot-status" style="color:#888;font-size:11px;margin-left:8px;"></span>',
             '  </div>',
-            '  <p style="font-size:11px;color:#666;">Uses Pollinations.ai (free, no account). Falls back to local phrases if offline. 20s cooldown.</p>',
+            '  <p style="font-size:11px;color:#666;">Uses Google Gemini. Auto-pauses 60s on rate limit. 5s cooldown.</p>',
             '</div>',
             '',
             '<div class="section">',
@@ -2013,6 +2037,18 @@
                 var statusEl = document.getElementById("chatbot-status");
                 if (statusEl) statusEl.textContent = chatbotEnabled ? "Active" : "Off";
             });
+        }
+
+        var geminiKeyInput = document.getElementById("gemini-key");
+        if (geminiKeyInput) {
+            geminiKeyInput.addEventListener("change", function() {
+                geminiApiKey = this.value.trim();
+                localStorage.setItem("arras-afk-gemini-key", geminiApiKey);
+                var statusEl = document.getElementById("chatbot-status");
+                if (statusEl) statusEl.textContent = geminiApiKey ? "Key saved" : "No key";
+            });
+            geminiKeyInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            geminiKeyInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
         }
 
         var personalityInput = document.getElementById("chatbot-personality");
