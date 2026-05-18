@@ -1340,7 +1340,7 @@
             if (now - lastDetectedChats[key] > 10000) delete lastDetectedChats[key];
         }
 
-        // DELAY response by 500ms — gives time for frequency tracker to flag names/debug
+        // DELAY response by 200ms — gives time for frequency tracker to flag names/debug
         // Real chat appears once or twice; names/debug repeat many times per second
         setTimeout(function() {
             if (knownNames[text]) {
@@ -1422,7 +1422,7 @@
                 console.log("[AFK Bot] Responding (" + triggerReason + ")");
                 respondToChat(text);
             }
-        }, 500);
+        }, 200);
     }
 
     // Send a chat message in-game by simulating keypresses
@@ -1548,14 +1548,14 @@
             var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" + geminiApiKey;
             console.log("[AFK Bot] Calling Gemini...");
             var controller = new AbortController();
-            var timeoutId = setTimeout(function() { controller.abort(); }, 30000);
+            var timeoutId = setTimeout(function() { controller.abort(); }, 10000);
             var response = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 signal: controller.signal,
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { maxOutputTokens: 60, temperature: 0.9 }
+                    generationConfig: { maxOutputTokens: 30, temperature: 0.9 }
                 })
             });
             clearTimeout(timeoutId);
@@ -1584,7 +1584,7 @@
                 console.log("[AFK Bot] Gemini status " + response.status + ": " + errText.substring(0, 100));
             }
         } catch (e) {
-            console.log("[AFK Bot] Gemini error: " + (e.name === "AbortError" ? "timed out 30s" : e.message));
+            console.log("[AFK Bot] Gemini error: " + (e.name === "AbortError" ? "timed out 10s" : e.message));
         }
         return null;
     }
@@ -1632,7 +1632,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = "You're a bot in arras.io, a 2D tank shooter game. Someone in game chat said: \"" + incomingText + "\" Reply naturally under " + CHATBOT_MAX_LENGTH + " chars. Actually engage with what they said. No trash talk. No game slang. Talk like a normal person. Keep it PG - mild banter is fine but nothing sexual or explicit. If you don't understand, ask what they mean. Just the reply, nothing else.";
+        var prompt = "You're a bot in arras.io. Chat: \"" + incomingText + "\" Reply under 60 chars. Engage with what they said. No slang. Keep it PG. Just the reply.";
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
