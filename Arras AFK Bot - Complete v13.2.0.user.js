@@ -1205,7 +1205,24 @@
         /wsi-|kci-|#cpd/i,                      // network debug tokens
         /[oz]=\d+/i,                            // "o=440 z=288" render params
         /t=\d+:\d+/i,                           // "t=0:0" time debug
-        /\d+\s*ms\s/i                           // any "123 ms" pattern
+        /\d+\s*ms\s/i,                          // any "123 ms" pattern
+        // Scores and numbers
+        /^\d[\d,\.]*[kmbt]?$/i,                // pure score values: "64.01k", "1,234"
+        /^\d+\/\d+/,                            // fractions: "3/5", "10/10"
+        // Upgrade tank names (single capitalized words or short phrases)
+        /^(Booster|Fighter|Overlord|Necromancer|Factory|Spike|Auto|Smasher|Landmine|Stalker|Ranger|Predator|Streamliner|Sprayer|Triplet|Penta|Spread|Octo|Battleship|Annihilator|Hybrid|Skimmer|Rocketeer|Manager|Destroyer|Gunner|Hunter|Twin|Sniper|Machine|Flank|Tri-?Angle|Assassin|Trapper|Basic|Pounder|Launcher|Constructor|Artillery|Mortar|Director|Overseer|Spawner|Cruiser|Carrier|Drone|Swarm|Hexa|Mega|Mini|Commander|Maleficitor|Conqueror|Redistributor|Ordnance|Bastion|Bulwark|Ception|Banshee|Falcon|Viper|Eagle|Vulture|Phoenix|Haven|Minotaur|Behemoth|Juggernaut|Titan|Colossus)$/i,
+        // Broadcast/announcement patterns
+        /^\[.*\]$/,                             // "[Server Message]"
+        /has (joined|left|been)/i,              // "X has joined"
+        /^server/i,                             // server messages
+        /^wave\s/i,                             // "Wave 5"
+        /^round\s/i,                            // "Round 3"
+        /killed by|destroyed|eliminated/i,      // kill feed
+        /^\w+\s(is|was|has)\s/,                 // status messages
+        // Speed/debug values
+        /^speed:/i, /^velocity:/i, /^ping:/i, /^latency:/i,
+        /^\d+\.\d+x$/,                          // multiplier values: "1.5x"
+        /^[+-]?\d+\.?\d*\s*[°%]/                // angles/percentages
     ];
 
     // Frequency tracker: tracks how often each text renders per second.
@@ -1247,10 +1264,13 @@
         for (var i = 0; i < CHAT_IGNORE_PATTERNS.length; i++) {
             if (CHAT_IGNORE_PATTERNS[i].test(text)) return false;
         }
-        // Must contain at least one letter
+        // Must contain at least one letter and look like human text
         if (!/[a-zA-Z]/.test(text)) return false;
-        // Must have been seen fewer than 10 times recently (names repeat constantly)
-        if (textFrequency[text] && textFrequency[text].count >= 10) return false;
+        // Reject if it's mostly numbers/symbols (debug data)
+        var letters = (text.match(/[a-zA-Z]/g) || []).length;
+        if (letters < text.length * 0.3) return false;
+        // Must have been seen fewer than 3 times recently (much stricter)
+        if (textFrequency[text] && textFrequency[text].count >= 3) return false;
         return true;
     }
 
@@ -1265,18 +1285,16 @@
             if (now - lastDetectedChats[key] > 10000) delete lastDetectedChats[key];
         }
 
-        // DELAY response by 500ms — gives time for frequency tracker to flag names
-        // If after 500ms the text is still not flagged as a known name, it's real chat
+        // DELAY response by 1000ms — gives time for frequency tracker to flag names/debug
+        // Real chat appears once or twice; names/debug repeat many times per second
         setTimeout(function() {
             if (knownNames[text]) {
-                console.log("[AFK Bot] Filtered (name): " + text);
-                return;
+                return; // silently skip known names
             }
-            // Double-check frequency — names will have 30+ renders in 500ms
-            if (textFrequency[text] && textFrequency[text].count >= 15) {
+            // After 1 second, anything seen 3+ times is NOT chat
+            if (textFrequency[text] && textFrequency[text].count >= 3) {
                 knownNames[text] = true;
-                console.log("[AFK Bot] Filtered (high freq): " + text);
-                return;
+                return; // silently skip repeated text
             }
 
             console.log("[AFK Bot] Chat confirmed: " + text);
