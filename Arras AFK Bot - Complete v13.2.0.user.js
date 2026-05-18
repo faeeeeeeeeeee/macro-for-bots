@@ -1196,7 +1196,16 @@
         // Player name labels: "Name - Class: Score" or "Name - Class: 123.4k/m/b"
         /\s-\s.+:\s*[\d\.]+[kmbt]?$/i,
         // Player name with brackets like [φ [phi]] or [TAG]
-        /\[.+\]/
+        /\[.+\]/,
+        // Game debug/stats overlays
+        /\d+\s*FPS/i,                          // "59 FPS / 0.3 mspt"
+        /\d+\.\d+\s*ms/i,                      // "104.6 ms wsi-kci-z #cpd"
+        /mspt/i,                                // milliseconds per tick
+        /^Rendering:/i,                         // "Rendering: o=440 z=288 t=0:0 h"
+        /wsi-|kci-|#cpd/i,                      // network debug tokens
+        /[oz]=\d+/i,                            // "o=440 z=288" render params
+        /t=\d+:\d+/i,                           // "t=0:0" time debug
+        /\d+\s*ms\s/i                           // any "123 ms" pattern
     ];
 
     // Frequency tracker: tracks how often each text renders per second.
