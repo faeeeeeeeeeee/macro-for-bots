@@ -330,8 +330,13 @@
         // Track text frequency for chat vs name detection
         if (chatbotEnabled) {
             trackTextFrequency(text);
+            // Store position for name-chat linking
+            var now = Date.now();
+            recentTextPositions.push({ text: text, x: x, y: y, time: now });
+            // Keep only last 200 entries and last 2 seconds
+            if (recentTextPositions.length > 200) recentTextPositions = recentTextPositions.slice(-100);
             if (isChatMessage(text)) {
-                onChatDetected(text);
+                onChatDetected(text, x, y);
             }
         }
 
@@ -1173,11 +1178,14 @@
         /answer me/i                         // "answer me"
     ];
     var inConversation = false; // True when bot is actively chatting with someone
+    var conversationPartner = null; // Name of the player we're chatting with
     var conversationTimeout = null; // Timer to end conversation after inactivity
     var chatDetectionReady = false; // False until startup delay passes
     var scriptLoadTime = Date.now(); // When the script loaded
     var lastBotChatTime = 0; // Track when bot last chatted (for reply detection)
     var lastChatTime = 0;
+    var overrideRespondTo = localStorage.getItem("arras-afk-override-name") || ""; // Manual override: always respond to this player
+    var recentTextPositions = []; // Track {text, x, y, time} for position-based name matching
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
     var ownSentMessages = {};      // Bot's own messages: text -> timestamp (ignore for 10s)
@@ -1277,7 +1285,34 @@
         return true;
     }
 
-    function onChatDetected(text) {
+    // Find the player name nearest to a chat bubble position
+    // Chat renders above the player name, so we look for known names at similar X but lower Y
+    function findSpeaker(chatX, chatY) {
+        var now = Date.now();
+        var bestName = null;
+        var bestDist = 999999;
+        for (var i = recentTextPositions.length - 1; i >= 0; i--) {
+            var entry = recentTextPositions[i];
+            if (now - entry.time > 500) break; // Only look at very recent renders
+            // Check if this text is a known name (renders every frame)
+            if (!knownNames[entry.text]) continue;
+            // Name should be at similar X (within 100px) and below the chat (higher Y value)
+            var dx = Math.abs(entry.x - chatX);
+            var dy = entry.y - chatY; // positive = name is below chat
+            if (dx < 100 && dy > 0 && dy < 200) {
+                var dist = dx + dy;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    // Extract just the player name (strip " - Class: Score" suffix)
+                    var name = entry.text.replace(/\s-\s.+:\s*[\d\.]+[kmbt]?$/i, "").trim();
+                    if (name.length > 0) bestName = name;
+                }
+            }
+        }
+        return bestName;
+    }
+
+    function onChatDetected(text, chatX, chatY) {
         var now = Date.now();
         // Ignore everything for the first 3 seconds after script loads
         if (!chatDetectionReady) {
@@ -1306,8 +1341,10 @@
                 return; // silently skip repeated text
             }
 
-            console.log("[AFK Bot] Chat confirmed: " + text);
-            detectedChatMessages.push({ text: text, time: now });
+            // Try to identify who said this
+            var speaker = findSpeaker(chatX, chatY);
+            console.log("[AFK Bot] Chat confirmed: " + text + (speaker ? " (from: " + speaker + ")" : " (unknown speaker)"));
+            detectedChatMessages.push({ text: text, time: now, speaker: speaker });
             if (detectedChatMessages.length > 10) detectedChatMessages.shift();
 
             // Check if message triggers a response via keywords, context, or reply
@@ -1335,10 +1372,18 @@
                 }
             }
 
-            // 3. Conversation mode: if we're in a conversation, keep responding
+            // 3. Conversation mode: if we're in a conversation, only respond to the same person
             if (!triggered && inConversation) {
+                if (!conversationPartner || !speaker || speaker === conversationPartner) {
+                    triggered = true;
+                    triggerReason = "in conversation" + (conversationPartner ? " with " + conversationPartner : "");
+                }
+            }
+
+            // 3b. Manual override: always respond to this player
+            if (!triggered && overrideRespondTo && speaker && speaker.toLowerCase() === overrideRespondTo.toLowerCase()) {
                 triggered = true;
-                triggerReason = "in conversation";
+                triggerReason = "override: " + overrideRespondTo;
             }
 
             // 4. Reply detection: if someone chats within 15s after bot spoke, they're replying
@@ -1350,10 +1395,12 @@
             if (triggered && chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
                 // Respond right away and enter conversation mode
                 inConversation = true;
+                if (speaker) conversationPartner = speaker;
                 // Reset conversation timeout — end conversation after 45s of no chat
                 if (conversationTimeout) clearTimeout(conversationTimeout);
                 conversationTimeout = setTimeout(function() {
                     inConversation = false;
+                    conversationPartner = null;
                     console.log("[AFK Bot] Conversation ended (45s no chat)");
                 }, 45000);
                 console.log("[AFK Bot] Responding (" + triggerReason + ")");
@@ -1958,11 +2005,15 @@
             '    <label style="color:#888;font-size:11px;">Personality Prompt</label>',
             '    <textarea id="chatbot-personality" rows="3" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;resize:vertical;">' + chatbotPersonality.replace(/'/g, "&#39;") + '</textarea>',
             '  </div>',
+            '  <div style="margin-bottom:8px;">',
+            '    <label style="color:#888;font-size:11px;">Always respond to (override)</label>',
+            '    <input type="text" id="override-respond-to" value="' + overrideRespondTo + '" placeholder="Player name (leave empty for auto)" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;">',
+            '  </div>',
             '  <div style="margin-bottom:4px;">',
             '    <button id="btn-test-chat" class="btn btn-summon" style="font-size:11px;padding:4px 12px;">Test Chat</button>',
             '    <span id="chatbot-status" style="color:#888;font-size:11px;margin-left:8px;"></span>',
             '  </div>',
-            '  <p style="font-size:11px;color:#666;">Uses Google Gemini. Auto-pauses 60s on rate limit. 5s cooldown.</p>',
+            '  <p style="font-size:11px;color:#666;">Uses Google Gemini. Tracks who is chatting. Auto-pauses 60s on rate limit.</p>',
             '</div>',
             '',
             '<div class="section">',
@@ -2123,6 +2174,18 @@
             });
             personalityInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
             personalityInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
+        }
+
+        var overrideInput = document.getElementById("override-respond-to");
+        if (overrideInput) {
+            overrideInput.addEventListener("change", function() {
+                overrideRespondTo = this.value.trim();
+                localStorage.setItem("arras-afk-override-name", overrideRespondTo);
+                var statusEl = document.getElementById("chatbot-status");
+                if (statusEl) statusEl.textContent = overrideRespondTo ? "Override: " + overrideRespondTo : "Auto mode";
+            });
+            overrideInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            overrideInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
         }
 
         var testChatBtn = document.getElementById("btn-test-chat");
