@@ -1261,9 +1261,9 @@
             textFrequency[text].count++;
             textFrequency[text].lastSeen = now;
         }
-        // If seen 10+ times within 1 second, it's definitely a name
+        // If seen 3+ times, it's definitely NOT chat (names/UI render every frame)
         var entry = textFrequency[text];
-        if (entry.count >= 10 && (entry.lastSeen - entry.firstSeen) < 1000) {
+        if (entry.count >= 3) {
             knownNames[text] = true;
         }
         // Clean old entries every 5 seconds
@@ -1291,7 +1291,7 @@
         // Reject if it's mostly numbers/symbols (debug data)
         var letters = (text.match(/[a-zA-Z]/g) || []).length;
         if (letters < text.length * 0.3) return false;
-        // Must have been seen fewer than 2 times recently (very strict — chat only shows once or twice)
+        // Chat only renders once per appearance — anything seen 2+ times is NOT chat
         if (textFrequency[text] && textFrequency[text].count >= 2) return false;
         return true;
     }
