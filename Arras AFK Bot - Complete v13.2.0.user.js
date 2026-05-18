@@ -1285,13 +1285,13 @@
             if (now - lastDetectedChats[key] > 10000) delete lastDetectedChats[key];
         }
 
-        // DELAY response by 1000ms — gives time for frequency tracker to flag names/debug
+        // DELAY response by 500ms — gives time for frequency tracker to flag names/debug
         // Real chat appears once or twice; names/debug repeat many times per second
         setTimeout(function() {
             if (knownNames[text]) {
                 return; // silently skip known names
             }
-            // After 1 second, anything seen 3+ times is NOT chat
+            // After 500ms, anything seen 3+ times is NOT chat
             if (textFrequency[text] && textFrequency[text].count >= 3) {
                 knownNames[text] = true;
                 return; // silently skip repeated text
@@ -1455,7 +1455,7 @@
                 signal: controller.signal,
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { maxOutputTokens: 40, temperature: 0.9 }
+                    generationConfig: { maxOutputTokens: 20, temperature: 0.9 }
                 })
             });
             clearTimeout(timeoutId);
@@ -1510,7 +1510,7 @@
         if (!chatbotEnabled) return;
         // Lock cooldown immediately so no second message can start while API is loading
         lastChatTime = Date.now();
-        var prompt = chatbotPersonality + " Someone said: \"" + incomingText + "\" Reply in under " + CHATBOT_MAX_LENGTH + " characters. Just the reply, no quotes.";
+        var prompt = "Arras.io chat. Reply under " + CHATBOT_MAX_LENGTH + " chars to: " + incomingText;
         var reply = await getAIResponse(prompt, "respond");
         if (reply) {
             await sendGameChat(reply);
