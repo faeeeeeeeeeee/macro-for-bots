@@ -1171,8 +1171,8 @@
         /respond/i,                          // "respond"
         /answer me/i                         // "answer me"
     ];
-    var CHATBOT_RESPONSE_DELAY_MSGS = 2; // Wait this many more chat messages before responding
-    var pendingTrigger = null; // Stores the trigger message waiting for delay
+    var inConversation = false; // True when bot is actively chatting with someone
+    var conversationTimeout = null; // Timer to end conversation after inactivity
     var lastBotChatTime = 0; // Track when bot last chatted (for reply detection)
     var lastChatTime = 0;
     var detectedChatMessages = []; // Chat messages seen on canvas
@@ -1326,26 +1326,29 @@
                 }
             }
 
-            // 3. Reply detection: if someone chats within 10s after bot spoke, they might be replying
-            if (!triggered && lastBotChatTime > 0 && (Date.now() - lastBotChatTime < 10000)) {
+            // 3. Conversation mode: if we're in a conversation, keep responding
+            if (!triggered && inConversation) {
                 triggered = true;
-                triggerReason = "reply (within 10s of bot's last message)";
+                triggerReason = "in conversation";
+            }
+
+            // 4. Reply detection: if someone chats within 15s after bot spoke, they're replying
+            if (!triggered && lastBotChatTime > 0 && (Date.now() - lastBotChatTime < 15000)) {
+                triggered = true;
+                triggerReason = "reply (within 15s of bot's last message)";
             }
 
             if (triggered && chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
-                // Don't respond immediately — wait for a few more messages first
-                pendingTrigger = { text: text, msgsToWait: CHATBOT_RESPONSE_DELAY_MSGS };
-                console.log("[AFK Bot] Triggered (" + triggerReason + ")! Waiting " + CHATBOT_RESPONSE_DELAY_MSGS + " more messages");
-            } else if (pendingTrigger && !triggered) {
-                // Count down messages (excluding own messages already filtered)
-                pendingTrigger.msgsToWait--;
-                if (pendingTrigger.msgsToWait <= 0) {
-                    var triggerText = pendingTrigger.text;
-                    pendingTrigger = null;
-                    if (chatbotEnabled && Date.now() - lastChatTime > CHATBOT_COOLDOWN) {
-                        respondToChat(triggerText);
-                    }
-                }
+                // Respond right away and enter conversation mode
+                inConversation = true;
+                // Reset conversation timeout — end conversation after 20s of no chat
+                if (conversationTimeout) clearTimeout(conversationTimeout);
+                conversationTimeout = setTimeout(function() {
+                    inConversation = false;
+                    console.log("[AFK Bot] Conversation ended (20s no chat)");
+                }, 20000);
+                console.log("[AFK Bot] Responding (" + triggerReason + ")");
+                respondToChat(text);
             }
         }, 500);
     }
