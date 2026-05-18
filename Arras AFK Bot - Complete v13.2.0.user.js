@@ -329,14 +329,19 @@
 
         // Track text frequency for chat vs name detection
         if (chatbotEnabled) {
-            trackTextFrequency(text);
-            // Store position for name-chat linking
-            var now = Date.now();
-            recentTextPositions.push({ text: text, x: x, y: y, time: now });
-            // Keep only last 200 entries and last 2 seconds
-            if (recentTextPositions.length > 200) recentTextPositions = recentTextPositions.slice(-100);
-            if (isChatMessage(text)) {
-                onChatDetected(text, x, y);
+            // Only process text within the visible canvas viewport (skip off-screen renders)
+            var cvs = ctx.canvas;
+            var inViewport = !cvs || (x >= -50 && y >= -50 && x <= cvs.width + 50 && y <= cvs.height + 50);
+            if (inViewport) {
+                trackTextFrequency(text);
+                // Store position for name-chat linking
+                var now = Date.now();
+                recentTextPositions.push({ text: text, x: x, y: y, time: now });
+                // Keep only last 200 entries and last 2 seconds
+                if (recentTextPositions.length > 200) recentTextPositions = recentTextPositions.slice(-100);
+                if (isChatMessage(text)) {
+                    onChatDetected(text, x, y);
+                }
             }
         }
 
@@ -1222,6 +1227,12 @@
         /^\d+\/\d+/,                            // fractions: "3/5", "10/10"
         // Upgrade tank names (single capitalized words or short phrases)
         /^(Booster|Fighter|Overlord|Necromancer|Factory|Spike|Auto|Smasher|Landmine|Stalker|Ranger|Predator|Streamliner|Sprayer|Triplet|Penta|Spread|Octo|Battleship|Annihilator|Hybrid|Skimmer|Rocketeer|Manager|Destroyer|Gunner|Hunter|Twin|Sniper|Machine|Flank|Tri-?Angle|Assassin|Trapper|Basic|Pounder|Launcher|Constructor|Artillery|Mortar|Director|Overseer|Spawner|Cruiser|Carrier|Drone|Swarm|Hexa|Mega|Mini|Commander|Maleficitor|Conqueror|Redistributor|Ordnance|Bastion|Bulwark|Ception|Banshee|Falcon|Viper|Eagle|Vulture|Phoenix|Haven|Minotaur|Behemoth|Juggernaut|Titan|Colossus)$/i,
+        // Stat upgrade labels
+        /^(Health Regen|Max Health|Body Damage|Bullet Speed|Bullet Penetration|Bullet Damage|Reload|Movement Speed|Shield Regen|Shield Capacity|FOV|Drone Speed|Drone Health|Drone Penetration|Drone Damage|Drone Count|Respawn Rate)$/i,
+        // Single/two word game UI labels (upgrades, menus, buttons)
+        /^(Upgrade|Upgrades|Stats|Score|Class|Tank|Tanks|Max|Health|Damage|Speed|Reload|Regen|Shield|Penetration|Capacity|Bullet|Drone|Body|Movement|FOV|Level Up)$/i,
+        // Text that's just 1-2 words with first letter capitalized (likely UI label not chat)
+        /^[A-Z][a-z]+$/,
         // Broadcast/announcement patterns
         /^\[.*\]$/,                             // "[Server Message]"
         /has (joined|left|been)/i,              // "X has joined"
@@ -1280,8 +1291,8 @@
         // Reject if it's mostly numbers/symbols (debug data)
         var letters = (text.match(/[a-zA-Z]/g) || []).length;
         if (letters < text.length * 0.3) return false;
-        // Must have been seen fewer than 3 times recently (much stricter)
-        if (textFrequency[text] && textFrequency[text].count >= 3) return false;
+        // Must have been seen fewer than 2 times recently (very strict — chat only shows once or twice)
+        if (textFrequency[text] && textFrequency[text].count >= 2) return false;
         return true;
     }
 
@@ -1316,9 +1327,9 @@
         var now = Date.now();
         // Ignore everything for the first 3 seconds after script loads
         if (!chatDetectionReady) {
-            if (now - scriptLoadTime < 3000) return;
+            if (now - scriptLoadTime < 5000) return;
             chatDetectionReady = true;
-            console.log("[AFK Bot] Chat detection ready (3s startup delay passed)");
+            console.log("[AFK Bot] Chat detection ready (5s startup delay passed)");
         }
         // Dedup: same text within 5 seconds is a re-render
         if (lastDetectedChats[text] && now - lastDetectedChats[text] < 5000) return;
