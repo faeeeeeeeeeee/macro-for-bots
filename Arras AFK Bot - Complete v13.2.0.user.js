@@ -345,6 +345,11 @@
             }
         }
 
+        // Track followed player's screen position
+        if (followPlayerName && text.toLowerCase().indexOf(followPlayerName.toLowerCase()) === 0) {
+            followPlayerPos = { x: x, y: y, time: Date.now() };
+        }
+
         // Detect "DISCONNECT" state
         if (lowerText === "disconnect" || lowerText === "disconnected" || lowerText.includes("disconnect")) {
             if (!disconnectDetected) {
@@ -1190,6 +1195,8 @@
     var lastBotChatTime = 0; // Track when bot last chatted (for reply detection)
     var lastChatTime = 0;
     var overrideRespondTo = localStorage.getItem("arras-afk-override-name") || ""; // Manual override: always respond to this player
+    var followPlayerName = localStorage.getItem("arras-afk-follow-player") || ""; // Follow this player
+    var followPlayerPos = null; // { x, y, time } - last known screen position of followed player
     var recentTextPositions = []; // Track {text, x, y, time} for position-based name matching
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1767,6 +1774,23 @@
     }
 
     function pickBiasedDirection() {
+        // Follow player mode: move toward their screen position
+        if (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000) {
+            var canvas = getCanvas();
+            if (canvas) {
+                var rect = canvas.getBoundingClientRect();
+                var centerX = rect.width / 2;
+                var centerY = rect.height / 2;
+                var dx = followPlayerPos.x - centerX;
+                var dy = followPlayerPos.y - centerY;
+                var dist = Math.hypot(dx, dy);
+                // Only move if player is more than 50px from center (not already on top of them)
+                if (dist > 50) {
+                    return pickDirectionIndex(dx / dist, dy / dist);
+                }
+            }
+        }
+
         var targetDir = getTargetDirection();
 
         if (wallAvoidanceMode) {
@@ -2047,6 +2071,10 @@
             '    <label style="color:#888;font-size:11px;">Always respond to (override)</label>',
             '    <input type="text" id="override-respond-to" value="' + overrideRespondTo + '" placeholder="Player name (leave empty for auto)" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;">',
             '  </div>',
+            '  <div style="margin-bottom:8px;">',
+            '    <label style="color:#888;font-size:11px;">Follow player (move toward them)</label>',
+            '    <input type="text" id="follow-player-name" value="' + followPlayerName + '" placeholder="Player name to follow (leave empty to disable)" style="width:100%;padding:6px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;">',
+            '  </div>',
             '  <div style="margin-bottom:4px;">',
             '    <button id="btn-test-chat" class="btn btn-summon" style="font-size:11px;padding:4px 12px;">Test Chat</button>',
             '    <span id="chatbot-status" style="color:#888;font-size:11px;margin-left:8px;"></span>',
@@ -2224,6 +2252,19 @@
             });
             overrideInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
             overrideInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
+        }
+
+        var followInput = document.getElementById("follow-player-name");
+        if (followInput) {
+            followInput.addEventListener("change", function() {
+                followPlayerName = this.value.trim();
+                localStorage.setItem("arras-afk-follow-player", followPlayerName);
+                followPlayerPos = null; // Reset position when name changes
+                var statusEl = document.getElementById("chatbot-status");
+                if (statusEl) statusEl.textContent = followPlayerName ? "Following: " + followPlayerName : "Not following";
+            });
+            followInput.addEventListener("keydown", function(e) { e.stopPropagation(); });
+            followInput.addEventListener("keyup", function(e) { e.stopPropagation(); });
         }
 
         var testChatBtn = document.getElementById("btn-test-chat");
