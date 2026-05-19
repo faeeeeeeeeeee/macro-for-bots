@@ -349,20 +349,38 @@
         if (followPlayerName) {
             var followLower = followPlayerName.toLowerCase();
             var textLower = text.toLowerCase();
-            // Match if text contains the player name (handles "Name", "Name - Class: Score", etc)
             if (textLower.indexOf(followLower) !== -1) {
-                followPlayerPos = { x: x, y: y, time: Date.now() };
-                followRoaming = false;
-                // Estimate their game-world position: bot position + screen offset scaled
                 var cvs2 = ctx.canvas;
+                // Skip leaderboard: text on the right 25% of screen is likely leaderboard
+                var isLeaderboard = false;
                 if (cvs2) {
-                    var screenOffX = (x - cvs2.width / 2) / cvs2.width;
-                    var screenOffY = (y - cvs2.height / 2) / cvs2.height;
-                    followLastSeenGrid = { x: grid.x + screenOffX * 20, y: grid.y + screenOffY * 20 };
+                    if (x > cvs2.width * 0.70) isLeaderboard = true;
                 }
-                if (!followPlayerPos._logged) {
-                    console.log("[AFK Bot] Following: found '" + text + "' at screen (" + x.toFixed(0) + ", " + y.toFixed(0) + ")");
-                    followPlayerPos._logged = true;
+                // Skip if text starts with a rank number like "1. " or "#1"
+                if (/^\d+[\.\)]\s/.test(text) || /^#\d+/.test(text)) isLeaderboard = true;
+
+                if (!isLeaderboard) {
+                    followPlayerPos = { x: x, y: y, time: Date.now() };
+                    followRoaming = false;
+                    // Store direction from screen center as a unit vector for movement
+                    if (cvs2) {
+                        var fdx = x - cvs2.width / 2;
+                        var fdy = y - cvs2.height / 2;
+                        var fdist = Math.hypot(fdx, fdy);
+                        if (fdist > 1) {
+                            followPlayerPos.dirX = fdx / fdist;
+                            followPlayerPos.dirY = fdy / fdist;
+                            followPlayerPos.screenDist = fdist;
+                        }
+                        // Rough world position estimate for minimap/roaming
+                        var screenOffX = (x - cvs2.width / 2) / cvs2.width;
+                        var screenOffY = (y - cvs2.height / 2) / cvs2.height;
+                        followLastSeenGrid = { x: grid.x + screenOffX * 40, y: grid.y + screenOffY * 40 };
+                    }
+                    if (!followPlayerPos._logged) {
+                        console.log("[AFK Bot] Following: '" + text + "' at screen (" + x.toFixed(0) + ", " + y.toFixed(0) + ")");
+                        followPlayerPos._logged = true;
+                    }
                 }
             }
         }
@@ -1797,17 +1815,10 @@
         if (followPlayerName && followPlayerPos) {
             var timeSinceSeen = Date.now() - followPlayerPos.time;
 
-            // Player is visible (seen within last 1s) — move toward their screen position
-            if (timeSinceSeen < 1000) {
-                var canvas = getCanvas();
-                if (canvas) {
-                    var rect = canvas.getBoundingClientRect();
-                    var dx = followPlayerPos.x - rect.width / 2;
-                    var dy = followPlayerPos.y - rect.height / 2;
-                    var dist = Math.hypot(dx, dy);
-                    if (dist > 10) {
-                        return pickDirectionIndex(dx / dist, dy / dist);
-                    }
+            // Player is visible — use the pre-calculated direction from screen center
+            if (timeSinceSeen < 1000 && followPlayerPos.dirX !== undefined) {
+                if (followPlayerPos.screenDist > 80) {
+                    return pickDirectionIndex(followPlayerPos.dirX, followPlayerPos.dirY);
                 }
             }
             // Player left FOV — roam toward their last known game-world position
@@ -1933,16 +1944,10 @@
 
         // Follow mode: stop moving when close to target
         if (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000) {
-            var canvas = getCanvas();
-            if (canvas) {
-                var rect = canvas.getBoundingClientRect();
-                var dx = followPlayerPos.x - rect.width / 2;
-                var dy = followPlayerPos.y - rect.height / 2;
-                if (Math.hypot(dx, dy) < 80) {
-                    releaseAllMovement();
-                    currentDir = null;
-                    return;
-                }
+            if (followPlayerPos.screenDist !== undefined && followPlayerPos.screenDist < 80) {
+                releaseAllMovement();
+                currentDir = null;
+                return;
             }
         }
 
