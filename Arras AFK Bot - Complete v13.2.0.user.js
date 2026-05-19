@@ -345,9 +345,22 @@
             }
         }
 
-        // Track followed player's screen position
-        if (followPlayerName && text.toLowerCase().indexOf(followPlayerName.toLowerCase()) === 0) {
-            followPlayerPos = { x: x, y: y, time: Date.now() };
+        // Track followed player's screen position (independent of chatbot)
+        if (followPlayerName) {
+            var followLower = followPlayerName.toLowerCase();
+            // Match name at start of text (handles "Name - Class: Score" format)
+            if (text.toLowerCase().indexOf(followLower) === 0 || text.toLowerCase() === followLower) {
+                followPlayerPos = { x: x, y: y, time: Date.now() };
+                followRoaming = false;
+                // Estimate their game-world position: bot position + screen offset scaled
+                var cvs2 = ctx.canvas;
+                if (cvs2) {
+                    var screenOffX = (x - cvs2.width / 2) / cvs2.width;
+                    var screenOffY = (y - cvs2.height / 2) / cvs2.height;
+                    // Rough scale: screen edge ≈ 20 grid units from center
+                    followLastSeenGrid = { x: grid.x + screenOffX * 20, y: grid.y + screenOffY * 20 };
+                }
+            }
         }
 
         // Detect "DISCONNECT" state
@@ -1197,6 +1210,8 @@
     var overrideRespondTo = localStorage.getItem("arras-afk-override-name") || ""; // Manual override: always respond to this player
     var followPlayerName = localStorage.getItem("arras-afk-follow-player") || ""; // Follow this player
     var followPlayerPos = null; // { x, y, time } - last known screen position of followed player
+    var followLastSeenGrid = null; // { x, y } - game-world position estimate when player was last seen
+    var followRoaming = false; // True when player left FOV, bot is roaming around last known position
     var recentTextPositions = []; // Track {text, x, y, time} for position-based name matching
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1774,20 +1789,33 @@
     }
 
     function pickBiasedDirection() {
-        // Follow player mode: move toward their screen position
-        if (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000) {
-            var canvas = getCanvas();
-            if (canvas) {
-                var rect = canvas.getBoundingClientRect();
-                var centerX = rect.width / 2;
-                var centerY = rect.height / 2;
-                var dx = followPlayerPos.x - centerX;
-                var dy = followPlayerPos.y - centerY;
-                var dist = Math.hypot(dx, dy);
-                // Only move if player is more than 50px from center (not already on top of them)
-                if (dist > 50) {
-                    return pickDirectionIndex(dx / dist, dy / dist);
+        // Follow player mode
+        if (followPlayerName && followPlayerPos) {
+            var timeSinceSeen = Date.now() - followPlayerPos.time;
+
+            // Player is visible (seen within last 1s) — move toward their screen position
+            if (timeSinceSeen < 1000) {
+                var canvas = getCanvas();
+                if (canvas) {
+                    var rect = canvas.getBoundingClientRect();
+                    var dx = followPlayerPos.x - rect.width / 2;
+                    var dy = followPlayerPos.y - rect.height / 2;
+                    var dist = Math.hypot(dx, dy);
+                    if (dist > 10) {
+                        return pickDirectionIndex(dx / dist, dy / dist);
+                    }
                 }
+            }
+            // Player left FOV — roam toward their last known game-world position
+            else if (followLastSeenGrid && timeSinceSeen < 30000) {
+                followRoaming = true;
+                var toLastX = followLastSeenGrid.x - grid.x;
+                var toLastY = followLastSeenGrid.y - grid.y;
+                var distToLast = Math.hypot(toLastX, toLastY);
+                if (distToLast > 1) {
+                    return pickDirectionIndex(toLastX / distToLast, toLastY / distToLast);
+                }
+                return Math.floor(Math.random() * DIRECTIONS.length);
             }
         }
 
@@ -1898,6 +1926,21 @@
     // =========================================================================
     function fluidMovementLoop() {
         if (!movementEnabled || buildSequenceRunning || isChatSending) return;
+
+        // Follow mode: stop moving when close to target
+        if (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000) {
+            var canvas = getCanvas();
+            if (canvas) {
+                var rect = canvas.getBoundingClientRect();
+                var dx = followPlayerPos.x - rect.width / 2;
+                var dy = followPlayerPos.y - rect.height / 2;
+                if (Math.hypot(dx, dy) < 80) {
+                    releaseAllMovement();
+                    currentDir = null;
+                    return;
+                }
+            }
+        }
 
         checkForWall();
 
@@ -2109,6 +2152,11 @@
             '  <div class="stat-row"><span class="stat-label">Connected Alts</span><span class="stat-value" id="s-alts">0</span></div>',
             '  <button class="btn btn-leader" id="btn-leader">Become Leader</button>',
             '  <button class="btn btn-cancel" id="btn-resign" style="display:none">Resign Leader</button>',
+            '</div>',
+            '',
+            '<div class="section">',
+            '  <h3>Alt Minimap</h3>',
+            '  <canvas id="map-canvas" width="200" height="200" style="width:100%;border:1px solid #333;border-radius:6px;background:#0a0a1a;"></canvas>',
             '</div>',
             '',
             '<div class="section">',
@@ -2367,6 +2415,58 @@
 
         var roamVal = document.getElementById("roam-value");
         if (roamVal) roamVal.textContent = ROAM_BIAS_MULTIPLIER.toFixed(1) + "x";
+
+        drawMinimap();
+    }
+
+    function drawMinimap() {
+        if (!cpCanvas || !cpCtx) return;
+        var ctx = cpCtx;
+        var w = cpCanvas.width;
+        var h = cpCanvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // Map scale: game coords roughly -40 to 40 on each axis
+        var mapScale = 40;
+        function toMapX(gx) { return w / 2 + (gx / mapScale) * (w / 2); }
+        function toMapY(gy) { return h / 2 + (gy / mapScale) * (h / 2); }
+
+        // Draw grid lines
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.beginPath();
+        ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h);
+        ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2);
+        ctx.stroke();
+
+        // Draw alts as blue dots
+        var now = Date.now();
+        for (var tabId in altTabs) {
+            var tab = altTabs[tabId];
+            if (now - tab.lastSeen > 5000) continue;
+            var ax = toMapX(tab.gridX);
+            var ay = toMapY(tab.gridY);
+            ctx.fillStyle = tab.isLeader ? "#ffeb3b" : "#42a5f5";
+            ctx.beginPath();
+            ctx.arc(ax, ay, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw self as green dot
+        ctx.fillStyle = "#4caf50";
+        ctx.beginPath();
+        ctx.arc(toMapX(grid.x), toMapY(grid.y), 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw follow target as red dot (if we have their estimated world position)
+        if (followPlayerName && followLastSeenGrid) {
+            ctx.fillStyle = "#f44336";
+            ctx.beginPath();
+            ctx.arc(toMapX(followLastSeenGrid.x), toMapY(followLastSeenGrid.y), 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#f44336";
+            ctx.font = "9px sans-serif";
+            ctx.fillText(followPlayerName, toMapX(followLastSeenGrid.x) + 6, toMapY(followLastSeenGrid.y) + 3);
+        }
     }
 
     // =========================================================================
