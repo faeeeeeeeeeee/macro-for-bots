@@ -348,8 +348,9 @@
         // Track followed player's screen position (independent of chatbot)
         if (followPlayerName) {
             var followLower = followPlayerName.toLowerCase();
-            // Match name at start of text (handles "Name - Class: Score" format)
-            if (text.toLowerCase().indexOf(followLower) === 0 || text.toLowerCase() === followLower) {
+            var textLower = text.toLowerCase();
+            // Match if text contains the player name (handles "Name", "Name - Class: Score", etc)
+            if (textLower.indexOf(followLower) !== -1) {
                 followPlayerPos = { x: x, y: y, time: Date.now() };
                 followRoaming = false;
                 // Estimate their game-world position: bot position + screen offset scaled
@@ -357,8 +358,11 @@
                 if (cvs2) {
                     var screenOffX = (x - cvs2.width / 2) / cvs2.width;
                     var screenOffY = (y - cvs2.height / 2) / cvs2.height;
-                    // Rough scale: screen edge ≈ 20 grid units from center
                     followLastSeenGrid = { x: grid.x + screenOffX * 20, y: grid.y + screenOffY * 20 };
+                }
+                if (!followPlayerPos._logged) {
+                    console.log("[AFK Bot] Following: found '" + text + "' at screen (" + x.toFixed(0) + ", " + y.toFixed(0) + ")");
+                    followPlayerPos._logged = true;
                 }
             }
         }
@@ -1965,6 +1969,10 @@
 
             if (wallAvoidanceMode) {
                 holdTime = Math.min(holdTime, 800);
+            }
+            // When following a player, update direction faster to track them
+            if (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000) {
+                holdTime = Math.min(holdTime, 150);
             }
 
             currentDirHoldUntil = now + holdTime;
