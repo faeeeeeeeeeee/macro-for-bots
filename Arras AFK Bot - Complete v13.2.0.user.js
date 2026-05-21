@@ -1291,6 +1291,9 @@
     var followPlayerPos = null; // { x, y, time } - last known screen position of followed player
     var followLastSeenGrid = null; // { x, y } - game-world position estimate when player was last seen
     var followRoaming = false; // True when player left FOV, bot is roaming around last known position
+    var followMouseEnabled = false; // Toggle: bot moves toward mouse cursor
+    var mouseScreenX = 0; // Current mouse position on screen
+    var mouseScreenY = 0;
     var recentTextPositions = []; // Track {text, x, y, time} for position-based name matching
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1868,6 +1871,22 @@
     }
 
     function pickBiasedDirection() {
+        // Follow mouse mode — move toward mouse cursor
+        if (followMouseEnabled) {
+            var canvas = getCanvas();
+            if (canvas) {
+                var rect = canvas.getBoundingClientRect();
+                var centerX = rect.left + rect.width / 2;
+                var centerY = rect.top + rect.height / 2;
+                var mdx = mouseScreenX - centerX;
+                var mdy = mouseScreenY - centerY;
+                var mDist = Math.hypot(mdx, mdy);
+                if (mDist > 30) {
+                    return pickDirectionIndex(mdx / mDist, mdy / mDist);
+                }
+            }
+        }
+
         // Follow player mode
         if (followPlayerName && followPlayerPos) {
             var timeSinceSeen = Date.now() - followPlayerPos.time;
@@ -2032,8 +2051,8 @@
             if (wallAvoidanceMode) {
                 holdTime = Math.min(holdTime, 800);
             }
-            // When following a player, update direction faster to track them
-            if (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000) {
+            // When following a player or mouse, update direction faster
+            if (followMouseEnabled || (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000)) {
                 holdTime = Math.min(holdTime, 150);
             }
 
@@ -2139,6 +2158,10 @@
             '    <div class="afk-switch on" id="sw-movement"></div>',
             '  </div>',
             '  <div class="toggle-row">',
+            '    <span class="toggle-label">Follow Mouse <small>(\\)</small></span>',
+            '    <div class="afk-switch" id="sw-follow-mouse"></div>',
+            '  </div>',
+            '  <div class="toggle-row">',
             '    <span class="toggle-label">Auto-Respawn</span>',
             '    <div class="afk-switch on" id="sw-respawn"></div>',
             '  </div>',
@@ -2242,7 +2265,7 @@
             '  </div>',
             '</div>',
             '',
-            '<div class="hint">Press <b>ESC</b> to close • <b>[</b> move • <b>]</b> respawn • Tab: ' + myTabId + '</div>',
+            '<div class="hint">Press <b>ESC</b> to close • <b>[</b> move • <b>]</b> respawn • <b>\\</b> follow mouse • Tab: ' + myTabId + '</div>',
         ].join("\n");
         document.body.appendChild(panel);
 
@@ -2256,6 +2279,12 @@
                 releaseAllMovement(); currentDir = null;
                 setStatus(autoRespawnEnabled ? "Idle (respawn active)" : "Idle");
             }
+            updateGUI();
+        });
+
+        document.getElementById("sw-follow-mouse").addEventListener("click", function() {
+            followMouseEnabled = !followMouseEnabled;
+            setStatus(followMouseEnabled ? "Following mouse" : "Moving");
             updateGUI();
         });
 
@@ -2480,8 +2509,10 @@
 
         var swMove = document.getElementById("sw-movement");
         var swResp = document.getElementById("sw-respawn");
+        var swFollowMouse = document.getElementById("sw-follow-mouse");
         if (swMove) swMove.classList.toggle("on", movementEnabled);
         if (swResp) swResp.classList.toggle("on", autoRespawnEnabled);
+        if (swFollowMouse) swFollowMouse.classList.toggle("on", followMouseEnabled);
 
         var roamVal = document.getElementById("roam-value");
         if (roamVal) roamVal.textContent = ROAM_BIAS_MULTIPLIER.toFixed(1) + "x";
@@ -2606,7 +2637,21 @@
             }
             updateGUI();
         }
+
+        // Backslash toggles follow-mouse mode
+        if (e.code === "Backslash") {
+            followMouseEnabled = !followMouseEnabled;
+            console.log("[AFK Bot] Follow mouse: " + (followMouseEnabled ? "ON" : "OFF"));
+            setStatus(followMouseEnabled ? "Following mouse" : "Moving");
+            updateGUI();
+        }
     }, true);
+
+    // Track mouse position for follow-mouse mode
+    document.addEventListener("mousemove", function(e) {
+        mouseScreenX = e.clientX;
+        mouseScreenY = e.clientY;
+    });
 
     // =========================================================================
     // [SECTION: BOOT] Boot / Initialization
