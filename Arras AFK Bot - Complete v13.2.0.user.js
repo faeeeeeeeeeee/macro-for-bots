@@ -284,8 +284,47 @@
     var lastReconnectAttempt = 0;
     var RECONNECT_COOLDOWN = 0;
 
+    // Camera transform tracking — captures the canvas transform matrix
+    // so we can convert between screen coords and game-world coords
+    var cameraTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; // current 2D affine matrix
+
+    function screenToWorld(screenX, screenY) {
+        // Inverse of affine: [a c e; b d f; 0 0 1]
+        var det = cameraTransform.a * cameraTransform.d - cameraTransform.b * cameraTransform.c;
+        if (Math.abs(det) < 0.0001) return { x: 0, y: 0 };
+        var invA = cameraTransform.d / det;
+        var invB = -cameraTransform.b / det;
+        var invC = -cameraTransform.c / det;
+        var invD = cameraTransform.a / det;
+        var invE = (cameraTransform.c * cameraTransform.f - cameraTransform.d * cameraTransform.e) / det;
+        var invF = (cameraTransform.b * cameraTransform.e - cameraTransform.a * cameraTransform.f) / det;
+        return {
+            x: invA * screenX + invC * screenY + invE,
+            y: invB * screenX + invD * screenY + invF
+        };
+    }
+
+    function worldToScreen(worldX, worldY) {
+        return {
+            x: cameraTransform.a * worldX + cameraTransform.c * worldY + cameraTransform.e,
+            y: cameraTransform.b * worldX + cameraTransform.d * worldY + cameraTransform.f
+        };
+    }
+
     function hookCanvasText() {
         var proto = CanvasRenderingContext2D.prototype;
+
+        // Hook setTransform to capture camera matrix
+        var origSetTransform = proto.setTransform;
+        proto.setTransform = function(a, b, c, d, e, f) {
+            // Store the transform — the game calls this to set up camera each frame
+            if (this.canvas && this.canvas.width > 100) {
+                cameraTransform.a = a; cameraTransform.b = b;
+                cameraTransform.c = c; cameraTransform.d = d;
+                cameraTransform.e = e; cameraTransform.f = f;
+            }
+            return origSetTransform.apply(this, arguments);
+        };
 
         var origFillText = proto.fillText;
         proto.fillText = function(text, x, y) {
@@ -345,40 +384,58 @@
             }
         }
 
-        // Track followed player's screen position (independent of chatbot)
+        // Track followed player's position using camera transform (independent of chatbot)
         if (followPlayerName) {
             var followLower = followPlayerName.toLowerCase();
             var textLower = text.toLowerCase();
             if (textLower.indexOf(followLower) !== -1) {
+                // x, y from fillText are in the game's local coordinate space
+                // Convert to screen coords using the current camera transform
+                var screenPos = worldToScreen(x, y);
                 var cvs2 = ctx.canvas;
-                // Skip leaderboard: text on the right 25% of screen is likely leaderboard
+
+                // Skip leaderboard: text on the right 25% of screen
                 var isLeaderboard = false;
                 if (cvs2) {
-                    if (x > cvs2.width * 0.70) isLeaderboard = true;
+                    if (screenPos.x > cvs2.width * 0.70) isLeaderboard = true;
                 }
-                // Skip if text starts with a rank number like "1. " or "#1"
                 if (/^\d+[\.\)]\s/.test(text) || /^#\d+/.test(text)) isLeaderboard = true;
 
                 if (!isLeaderboard) {
-                    followPlayerPos = { x: x, y: y, time: Date.now() };
+                    // Store both the game-world coords and screen coords
+                    followPlayerPos = {
+                        x: screenPos.x, y: screenPos.y, // screen position
+                        worldX: x, worldY: y,             // game rendering coords
+                        time: Date.now()
+                    };
                     followRoaming = false;
-                    // Store direction from screen center as a unit vector for movement
+
+                    // Calculate screen distance from center
                     if (cvs2) {
-                        var fdx = x - cvs2.width / 2;
-                        var fdy = y - cvs2.height / 2;
+                        var fdx = screenPos.x - cvs2.width / 2;
+                        var fdy = screenPos.y - cvs2.height / 2;
                         var fdist = Math.hypot(fdx, fdy);
+                        followPlayerPos.screenDist = fdist;
                         if (fdist > 1) {
                             followPlayerPos.dirX = fdx / fdist;
                             followPlayerPos.dirY = fdy / fdist;
-                            followPlayerPos.screenDist = fdist;
                         }
-                        // Rough world position estimate for minimap/roaming
-                        var screenOffX = (x - cvs2.width / 2) / cvs2.width;
-                        var screenOffY = (y - cvs2.height / 2) / cvs2.height;
-                        followLastSeenGrid = { x: grid.x + screenOffX * 40, y: grid.y + screenOffY * 40 };
                     }
+
+                    // Convert screen offset from center → world offset using camera zoom
+                    // Screen center = bot's position, zoom = cameraTransform.a
+                    if (cvs2 && Math.abs(cameraTransform.a) > 0.001) {
+                        var worldOffX = (screenPos.x - cvs2.width / 2) / cameraTransform.a;
+                        var worldOffY = (screenPos.y - cvs2.height / 2) / cameraTransform.d;
+                        followLastSeenGrid = {
+                            x: grid.x + worldOffX,
+                            y: grid.y + worldOffY
+                        };
+                    }
+
                     if (!followPlayerPos._logged) {
-                        console.log("[AFK Bot] Following: '" + text + "' at screen (" + x.toFixed(0) + ", " + y.toFixed(0) + ")");
+                        var wPos = followLastSeenGrid || {x:0,y:0};
+                        console.log("[AFK Bot] Following: '" + text + "' screen(" + screenPos.x.toFixed(0) + "," + screenPos.y.toFixed(0) + ") worldEst(" + wPos.x.toFixed(1) + "," + wPos.y.toFixed(1) + ") zoom=" + cameraTransform.a.toFixed(2));
                         followPlayerPos._logged = true;
                     }
                 }
