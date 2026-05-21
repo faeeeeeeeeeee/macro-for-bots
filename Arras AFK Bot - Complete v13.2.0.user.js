@@ -12,7 +12,7 @@
     "use strict";
 
     // Are we running inside an iframe bot? If so, skip iframe-spawning features.
-    var isInsideIframe = (window !== window.top);
+    var isInsideIframe = (window !== window.top) || !!window.__is_bot;
 
     // ╔═══════════════════════════════════════════════════════════════════════╗
     // ║                    TABLE OF CONTENTS / QUICK FIND                   ║
@@ -117,8 +117,8 @@
     var nextProxyIndex = 0;
 
     // =========================================================================
-    // [SECTION: BOT-WINDOWS] Bot Window System
-    // Opens separate browser windows for each bot instance.
+    // [SECTION: BOT-IFRAMES] Bot Iframe System
+    // Creates iframes that load the game. Each iframe runs the script as a bot.
     // Functions: createBotWindow(), removeBotWindow(), updateBotList()
     // Only runs in the TOP window.
     // =========================================================================
@@ -138,8 +138,8 @@
     function removeBotWindow(index) {
         if (window.botInstances[index]) {
             var bot = window.botInstances[index];
-            if (bot.win && !bot.win.closed) {
-                bot.win.close();
+            if (bot.iframe && bot.iframe.parentNode) {
+                bot.iframe.parentNode.removeChild(bot.iframe);
             }
             window.botInstances.splice(index, 1);
             saveBotState();
@@ -166,9 +166,9 @@
 
             var label = document.createElement("span");
             var proxyShort = bot.proxy ? bot.proxy.replace("socks5://", "") : "no proxy";
-            var status = (bot.win && !bot.win.closed) ? "open" : "closed";
+            var status = (bot.iframe && bot.iframe.parentNode) ? "running" : "stopped";
             label.textContent = "Bot #" + (i + 1) + " [" + proxyShort + "] (" + status + ")";
-            label.style.color = status === "open" ? "#4caf50" : "#f44336";
+            label.style.color = status === "running" ? "#4caf50" : "#f44336";
             botItem.appendChild(label);
 
             var closeBtn = document.createElement("button");
@@ -190,42 +190,37 @@
         }
     }
 
+    // Container div for bot iframes
+    var botIframeContainer = document.createElement("div");
+    botIframeContainer.style.position = "fixed";
+    botIframeContainer.style.bottom = "0";
+    botIframeContainer.style.right = "0";
+    botIframeContainer.style.zIndex = "1";
+    document.body.appendChild(botIframeContainer);
+
     function createBotWindow() {
         // Assign proxy round-robin
         var proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
         nextProxyIndex++;
 
-        // Open new window/tab to the game
-        var botWin = window.open(location.href, "_blank",
-            "width=400,height=300,menubar=no,toolbar=no,location=yes,status=no");
+        // Create iframe — same approach as the working arras bot script
+        var iframe = document.createElement("iframe");
+        iframe.src = location.href;
+        iframe.width = 60;
+        iframe.height = 40;
+        botIframeContainer.appendChild(iframe);
 
-        if (!botWin) {
-            alert("Popup blocked! Allow popups for arras.io in your browser settings.");
-            return null;
-        }
+        // Mark the iframe's window as a bot so the script inside knows
+        var iframeWin = iframe.contentWindow;
+        iframeWin.__is_bot = true;
 
         var botIndex = window.botInstances.length;
         var botObj = {
-            win: botWin,
+            iframe: iframe,
             index: botIndex,
             proxy: proxy
         };
         window.botInstances.push(botObj);
-
-        // Set window title to show proxy assignment
-        setTimeout(function() {
-            try {
-                botWin.document.title = "Bot #" + (botIndex + 1) + " | " + proxy;
-            } catch(e) {}
-        }, 2000);
-
-        // Monitor if window gets closed
-        var checkClosed = setInterval(function() {
-            if (botWin.closed) {
-                clearInterval(checkClosed);
-                updateBotList();
-            }
-        }, 3000);
 
         saveBotState();
         updateBotList();
@@ -2172,12 +2167,12 @@
             '  </div>',
             '</div>',
             '',
-            // Bot Windows section - only shown in top window
+            // Bot Iframes section - only shown in top window
             (isInsideIframe ? '' : [
             '<div class="section">',
-            '  <h3>Bot Windows + Proxies</h3>',
-            '  <p><button id="btn-create-bot" class="btn btn-summon">+ Open Bot Window</button></p>',
-            '  <p style="font-size:11px;color:#888;">Each window gets a different proxy.<br/>Allow popups for arras.io if blocked.</p>',
+            '  <h3>Bot Iframes + Proxies</h3>',
+            '  <p><button id="btn-create-bot" class="btn btn-summon">+ Create Bot</button></p>',
+            '  <p style="font-size:11px;color:#888;">Each bot runs in an iframe. No popups needed.</p>',
             '  <div id="bot-list" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>',
             '  <p style="font-size:11px;color:#666;margin-top:6px;">Proxies available: ' + PROXY_LIST.length + ' | Next: #' + (nextProxyIndex + 1) + '</p>',
             '</div>',
@@ -2657,7 +2652,7 @@
         lastCanvasActivity = Date.now();
 
         // Note: Bot windows are NOT auto-restored on reload.
-        // User clicks "+ Open Bot Window" manually after reload.
+        // User clicks "+ Create Bot" manually after reload.
 
         // Main movement loop
         setInterval(fluidMovementLoop, 50);
