@@ -297,9 +297,19 @@
     var lastReconnectAttempt = 0;
     var RECONNECT_COOLDOWN = 0;
 
-    // Camera transform tracking — uses ctx.getTransform() at render time
-    // to read the exact current transform matrix for coordinate conversion
+    // Camera transform tracking — dual approach:
+    // 1. ctx.getTransform() at render time (full affine matrix)
+    // 2. moveTo hook to derive game-to-display scale (gd) — from arras-codefetch
     var cameraTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+
+    // Game-to-display scale factor (from moveTo hook, more reliable than getTransform)
+    // gd = canvas.width / innerWidth / (diff between consecutive moveTo x values)
+    var gameDisplayScale = 1;  // gd
+    var moveToState = 2;       // st: counts down first 2 moveTo calls per frame
+    var moveToLastX = 0;       // lx: last moveTo x value
+    var canvasScaleRatio = 1;  // sr: canvas.width / innerWidth
+    // Coordinate freshness: counts down each frame, press L when stale
+    var coordFreshness = 5;
 
     function screenToWorld(screenX, screenY) {
         var t = cameraTransform;
@@ -332,6 +342,29 @@
         proto.strokeText = function(text, x, y) {
             onCanvasText(text, x, y, this);
             return origStrokeText.apply(this, arguments);
+        };
+
+        // Hook moveTo to derive game-to-display scale (gd)
+        // The game draws minimap lines; consecutive moveTo x-values reveal the camera zoom
+        var origMoveTo = proto.moveTo;
+        proto.moveTo = function() {
+            if (moveToState > 0) {
+                moveToState--;
+                var val = arguments[0];
+                var diff = Math.abs(val - moveToLastX);
+                if (moveToLastX !== 0 && diff !== 0 && canvasScaleRatio !== 0) {
+                    var newGd = canvasScaleRatio / diff;
+                    if (isFinite(newGd) && newGd > 0.1 && newGd < 2.5) {
+                        gameDisplayScale = newGd;
+                    }
+                }
+                moveToLastX = val;
+                // Update canvasScaleRatio from the canvas
+                if (this.canvas) {
+                    canvasScaleRatio = (this.canvas.width || window.innerWidth) / window.innerWidth;
+                }
+            }
+            return origMoveTo.apply(this, arguments);
         };
     }
 
@@ -366,7 +399,8 @@
 
                 await delay(3000);
                 pressEnter();
-                await delay(200);
+                await delay(500);
+                // Press L to enable coordinate display (required for position tracking)
                 await tapKey("KeyL", "l");
                 await delay(200);
                 runBuildSequence();
@@ -470,6 +504,7 @@
             detectedCoords.rawText = text;
             detectedCoords.hasData = true;
             coordUpdateCount++;
+            coordFreshness = 5; // Reset freshness — we just got fresh coords
             coordLastUpdateTime = Date.now();
 
             grid.x = newX / GRID_SCALE;
@@ -2031,6 +2066,18 @@
     // =========================================================================
     function fluidMovementLoop() {
         if (!movementEnabled || buildSequenceRunning || isChatSending) return;
+
+        // Reset moveTo state each loop iteration so it captures fresh scale data
+        moveToState = 2;
+
+        // Coordinate freshness: count down and press L when stale
+        // The game only shows coordinates after pressing L — keep them alive
+        coordFreshness--;
+        if (coordFreshness < 0 && coordDetectionDone) {
+            simulateKey("KeyL", "l", true);
+            setTimeout(function() { simulateKey("KeyL", "l", false); }, 50);
+            coordFreshness = 5;
+        }
 
         // Follow mode: stop moving when close to target
         if (followPlayerName && followPlayerPos && Date.now() - followPlayerPos.time < 1000) {
