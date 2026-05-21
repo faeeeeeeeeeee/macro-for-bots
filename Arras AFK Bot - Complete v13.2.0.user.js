@@ -14,6 +14,33 @@
     // Are we running inside an iframe bot? If so, skip iframe-spawning features.
     var isInsideIframe = (window !== window.top) || !!window.__is_bot;
 
+    // =========================================================================
+    // [SECTION: BOT-CHANNEL] Bot-side channel reading
+    // When running as an iframe bot, read config from window.channel set by parent.
+    // channel.clan, channel.tank, channel.moving, channel.disRender, channel.reconnect()
+    // =========================================================================
+    var botChannel = (isInsideIframe && window.channel) ? window.channel : null;
+
+    if (isInsideIframe && botChannel) {
+        // Provide reconnect function to parent (deferred — pressEnter defined later)
+        botChannel.reconnect = function() {
+            try { pressEnter(); } catch(e) {}
+        };
+
+        // Disable canvas rendering for performance if parent requested it
+        // Keep fillText/strokeText/moveTo alive — needed for coordinate detection and scale tracking
+        if (botChannel.disRender) {
+            var _proto = CanvasRenderingContext2D.prototype;
+            var _noop = function() {};
+            ["fillRect","strokeRect","clearRect","fill","stroke","drawImage",
+             "arc","ellipse","rect","beginPath","closePath","lineTo",
+             "bezierCurveTo","quadraticCurveTo","clip"
+            ].forEach(function(method) {
+                if (_proto[method]) _proto[method] = _noop;
+            });
+        }
+    }
+
     // ╔═══════════════════════════════════════════════════════════════════════╗
     // ║                    TABLE OF CONTENTS / QUICK FIND                   ║
     // ║                                                                     ║
@@ -184,35 +211,53 @@
         nextProxyIndex++;
 
         var iframe = document.createElement("iframe");
-        iframe.src = location.href;
         iframe.width = 60;
         iframe.height = 40;
+        iframe.style.pointerEvents = "none";
         botIframeContainer.appendChild(iframe);
 
-        var iframeWin = iframe.contentWindow;
-        iframeWin.__is_bot = true;
-
-        // Set up channel for parent-to-bot communication
-        iframeWin.channel = {
-            message: function() {}
-        };
-
-        // Read current settings from GUI (if available)
+        // Read current settings from GUI before the iframe loads
         var clanEl = document.getElementById("bot-clan-tag");
         var tankEl = document.getElementById("bot-tank-select");
         var movingEl = document.getElementById("bot-moving");
         var disRenderEl = document.getElementById("bot-disable-render");
 
-        iframeWin.channel.clan = clanEl ? clanEl.value.replace(/^\[|\]$/g, "") : "";
-        iframeWin.channel.tank = tankEl ? tankEl.value : "none";
-        iframeWin.channel.moving = movingEl ? movingEl.checked : true;
-        iframeWin.channel.disRender = disRenderEl ? disRenderEl.checked : false;
+        var channelConfig = {
+            clan: clanEl ? clanEl.value.replace(/^\[|\]$/g, "") : "",
+            tank: tankEl ? tankEl.value : "none",
+            moving: movingEl ? movingEl.checked : true,
+            disRender: disRenderEl ? disRenderEl.checked : false,
+            message: function() {},
+            reconnect: function() {}
+        };
+
+        // Inject channel as soon as the iframe's contentWindow is available,
+        // and re-inject on load (contentWindow resets on navigation)
+        function injectChannel() {
+            try {
+                var iframeWin = iframe.contentWindow;
+                if (iframeWin) {
+                    iframeWin.__is_bot = true;
+                    iframeWin.channel = channelConfig;
+                }
+            } catch(e) {}
+        }
+
+        // Inject immediately and on load
+        injectChannel();
+        iframe.addEventListener("load", function() {
+            injectChannel();
+        });
+
+        // Set src AFTER attaching listeners so the load event fires
+        iframe.src = location.href;
 
         var botIndex = window.botInstances.length;
         var botObj = {
             iframe: iframe,
             index: botIndex,
-            proxy: proxy
+            proxy: proxy,
+            channel: channelConfig
         };
         window.botInstances.push(botObj);
 
@@ -224,10 +269,15 @@
         for (var i = 0; i < window.botInstances.length; i++) {
             var bot = window.botInstances[i];
             try {
-                if (bot.iframe && bot.iframe.contentWindow && bot.iframe.contentWindow.channel) {
+                // Try channel.reconnect first, fall back to iframe reload
+                if (bot.iframe && bot.iframe.contentWindow && bot.iframe.contentWindow.channel && typeof bot.iframe.contentWindow.channel.reconnect === "function") {
                     bot.iframe.contentWindow.channel.reconnect();
+                } else if (bot.iframe) {
+                    bot.iframe.src = bot.iframe.src;
                 }
-            } catch(e) {}
+            } catch(e) {
+                try { bot.iframe.src = bot.iframe.src; } catch(e2) {}
+            }
         }
     }
 
@@ -398,11 +448,24 @@
             (async () => {
 
                 await delay(3000);
+                // If running as iframe bot, set clan tag in the name input
+                if (botChannel && botChannel.clan) {
+                    var nameInput = document.querySelector("input[type='text']") || document.querySelector("input");
+                    if (nameInput) {
+                        nameInput.value = "[" + botChannel.clan + "]";
+                        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                }
                 pressEnter();
                 await delay(500);
                 // Press L to enable coordinate display (required for position tracking)
                 await tapKey("KeyL", "l");
                 await delay(200);
+                // Iframe bots: enable autofire (press E) so they shoot automatically
+                if (isInsideIframe) {
+                    await tapKey("KeyE", "e");
+                    await delay(100);
+                }
                 runBuildSequence();
             })();
         }
@@ -1116,6 +1179,10 @@
     };
 
     var selectedTankUpgrade = "huu"; // Default to Booster
+    // Override tank if running as iframe bot with channel config
+    if (botChannel && botChannel.tank && botChannel.tank !== "none") {
+        selectedTankUpgrade = botChannel.tank;
+    }
 
     // =========================================================================
     // [SECTION: MOVEMENT-CFG] Movement Configuration
@@ -1290,7 +1357,7 @@
     //   - Adjust CHATBOT_COOLDOWN to change how often it talks (ms)
     //   - Adjust CHATBOT_MAX_LENGTH for message length limit
     // =========================================================================
-    var chatbotEnabled = (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
+    var chatbotEnabled = isInsideIframe ? false : (localStorage.getItem("arras-afk-chatbot-enabled") === "1");
     var geminiApiKey = localStorage.getItem("arras-afk-gemini-key") || "";
     var chatbotPersonality = localStorage.getItem("arras-afk-chatbot-personality") ||
         "You are a chill arras.io tank player. Keep responses under 60 characters. Be casual and natural, like a real player. No excessive slang. Never use profanity.";
@@ -2067,6 +2134,13 @@
     function fluidMovementLoop() {
         if (!movementEnabled || buildSequenceRunning || isChatSending) return;
 
+        // If iframe bot, check channel.moving — parent can toggle movement off
+        if (botChannel && botChannel.moving === false) {
+            releaseAllMovement();
+            currentDir = null;
+            return;
+        }
+
         // Reset moveTo state each loop iteration so it captures fresh scale data
         moveToState = 2;
 
@@ -2192,6 +2266,8 @@
     }
 
     function buildGUI() {
+        // Skip GUI entirely for iframe bots — they don't need a panel
+        if (isInsideIframe) return;
         injectCSS();
 
         var indicator = document.createElement("div");
@@ -2427,7 +2503,9 @@
                 botClanInput.addEventListener("input", function() {
                     var tag = botClanInput.value.replace(/^\[|\]$/g, "").trim();
                     for (var i = 0; i < window.botInstances.length; i++) {
-                        try { window.botInstances[i].iframe.contentWindow.channel.clan = tag; } catch(e) {}
+                        var bot = window.botInstances[i];
+                        if (bot.channel) bot.channel.clan = tag;
+                        try { bot.iframe.contentWindow.channel.clan = tag; } catch(e) {}
                     }
                 });
             }
@@ -2437,7 +2515,9 @@
             if (botMovingCb) {
                 botMovingCb.addEventListener("change", function() {
                     for (var i = 0; i < window.botInstances.length; i++) {
-                        try { window.botInstances[i].iframe.contentWindow.channel.moving = botMovingCb.checked; } catch(e) {}
+                        var bot = window.botInstances[i];
+                        if (bot.channel) bot.channel.moving = botMovingCb.checked;
+                        try { bot.iframe.contentWindow.channel.moving = botMovingCb.checked; } catch(e) {}
                     }
                 });
             }
@@ -2751,6 +2831,8 @@
     // To add a new hotkey: add "if (e.code === ...)" block below
     // =========================================================================
     document.addEventListener("keydown", function(e) {
+        // Iframe bots don't need hotkeys
+        if (isInsideIframe) return;
         if (e.code === "Escape") {
             e.stopPropagation();
             e.preventDefault();
