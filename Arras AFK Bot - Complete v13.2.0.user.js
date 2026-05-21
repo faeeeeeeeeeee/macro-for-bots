@@ -80,6 +80,38 @@
     //            reconnectAllBots(), disconnectAllBots(), spawnMultipleBots()
     // Only runs in the TOP window.
     // =========================================================================
+    // [SECTION: PROXY-LIST] SOCKS5 Proxy List
+    // Each bot iframe is assigned a proxy round-robin. The proxy is shown
+    // in the bot list so you can configure FoxyProxy / Proxy SwitchyOmega
+    // to route each bot's traffic through a different IP.
+    // =========================================================================
+    var PROXY_LIST = [
+        "socks5://192.252.209.155:14455",
+        "socks5://192.252.208.67:14287",
+        "socks5://123.54.197.16:21168",
+        "socks5://142.54.228.193:4145",
+        "socks5://123.54.197.19:22701",
+        "socks5://123.54.197.25:21715",
+        "socks5://123.54.197.50:21141",
+        "socks5://123.54.197.53:22917",
+        "socks5://142.54.231.38:4145",
+        "socks5://123.54.197.20:21281",
+        "socks5://170.233.30.33:4153",
+        "socks5://104.200.152.30:4145",
+        "socks5://221.202.27.194:10807",
+        "socks5://203.189.154.129:1080",
+        "socks5://123.54.197.52:20291",
+        "socks5://58.187.104.67:1090",
+        "socks5://208.65.90.3:4145",
+        "socks5://123.54.197.21:20909",
+        "socks5://174.77.111.198:49547",
+        "socks5://123.54.197.24:20969",
+        "socks5://98.191.0.47:4145",
+        "socks5://98.182.147.97:4145",
+        "socks5://123.54.197.51:21977"
+    ];
+    var nextProxyIndex = 0;
+
     if (!isInsideIframe) {
 
     window.botInstances = [];
@@ -113,8 +145,9 @@
             botItem.style.fontSize = "11px";
 
             var label = document.createElement("span");
+            var proxyShort = bot.proxy ? bot.proxy.replace("socks5://", "") : "no proxy";
             var status = (bot.iframe && bot.iframe.parentNode) ? "running" : "stopped";
-            label.textContent = "Bot #" + (i + 1) + " (" + status + ")";
+            label.textContent = "Bot #" + (i + 1) + " [" + proxyShort + "] (" + status + ")";
             label.style.color = status === "running" ? "#4caf50" : "#f44336";
             botItem.appendChild(label);
 
@@ -146,6 +179,10 @@
     document.body.appendChild(botIframeContainer);
 
     function createBotWindow() {
+        // Assign proxy round-robin
+        var proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
+        nextProxyIndex++;
+
         var iframe = document.createElement("iframe");
         iframe.src = location.href;
         iframe.width = 60;
@@ -174,7 +211,8 @@
         var botIndex = window.botInstances.length;
         var botObj = {
             iframe: iframe,
-            index: botIndex
+            index: botIndex,
+            proxy: proxy
         };
         window.botInstances.push(botObj);
 
@@ -2180,6 +2218,7 @@
             '    <label style="color:#888;font-size:11px;"><input type="checkbox" id="bot-disable-render"> Disable Render</label>',
             '  </div>',
             '  <div id="bot-list" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>',
+            '  <p style="font-size:11px;color:#666;margin-top:6px;">Proxies: ' + PROXY_LIST.length + ' available (round-robin)</p>',
             '</div>',
             ].join('\n')),
             '',
