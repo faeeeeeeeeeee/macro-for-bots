@@ -19,44 +19,63 @@
     // When running as an iframe bot, read config from window.channel set by parent.
     // channel.clan, channel.tank, channel.moving, channel.disRender, channel.reconnect()
     // =========================================================================
-    var botChannel = (isInsideIframe && window.channel) ? window.channel : null;
-
-    if (isInsideIframe && botChannel) {
-        // Provide reconnect function to parent (deferred — postSpawnSetup defined later)
-        botChannel.reconnect = function() {
-            try { postSpawnSetup(); } catch(e) {}
-        };
-
-        // Disable canvas rendering for performance if parent requested it
-        // Keep fillText/strokeText/moveTo alive — needed for coordinate detection and scale tracking
-        if (botChannel.disRender) {
-            var _proto = CanvasRenderingContext2D.prototype;
-            var _noop = function() {};
-            ["fillRect","strokeRect","clearRect","fill","stroke","drawImage",
-             "arc","ellipse","rect","beginPath","closePath","lineTo",
-             "bezierCurveTo","quadraticCurveTo","clip"
-            ].forEach(function(method) {
-                if (_proto[method]) _proto[method] = _noop;
-            });
-        }
-
-        // Route WebSocket through relay server if relay URL is set
-        // Rewrites: wss://game.arras.io/path → wss://relay.onrender.com/?target=wss://game.arras.io/path
-        if (botChannel.relayUrl) {
-            var _RealWebSocket = window.WebSocket;
-            var _relayUrl = botChannel.relayUrl.replace(/\/+$/, ""); // trim trailing slash
-            window.WebSocket = function(url, protocols) {
-                var relayTarget = _relayUrl + "/?target=" + encodeURIComponent(url);
-                var ws = new _RealWebSocket(relayTarget);
-                return ws;
+    // botChannel may not be available immediately (parent injects it on iframe load).
+    // Poll for it so we don't miss it due to timing.
+    var botChannel = null;
+    function getBotChannel() {
+        if (botChannel) return botChannel;
+        if (isInsideIframe && window.channel) {
+            botChannel = window.channel;
+            // Provide reconnect function to parent
+            botChannel.reconnect = function() {
+                try { postSpawnSetup(); } catch(e) {}
             };
-            window.WebSocket.prototype = _RealWebSocket.prototype;
-            window.WebSocket.prototype.constructor = window.WebSocket;
-            window.WebSocket.CONNECTING = _RealWebSocket.CONNECTING;
-            window.WebSocket.OPEN = _RealWebSocket.OPEN;
-            window.WebSocket.CLOSING = _RealWebSocket.CLOSING;
-            window.WebSocket.CLOSED = _RealWebSocket.CLOSED;
+            // Disable canvas rendering for performance if parent requested it
+            // Keep fillText/strokeText/moveTo alive — needed for coordinate detection and scale tracking
+            if (botChannel.disRender) {
+                var _proto = CanvasRenderingContext2D.prototype;
+                var _noop = function() {};
+                ["fillRect","strokeRect","clearRect","fill","stroke","drawImage",
+                 "arc","ellipse","rect","beginPath","closePath","lineTo",
+                 "bezierCurveTo","quadraticCurveTo","clip"
+                ].forEach(function(method) {
+                    if (_proto[method]) _proto[method] = _noop;
+                });
+            }
         }
+        return botChannel;
+    }
+    // Try reading immediately, and retry every 200ms for up to 5s
+    getBotChannel();
+    if (isInsideIframe && !botChannel) {
+        var _chPoll = setInterval(function() { if (getBotChannel()) clearInterval(_chPoll); }, 200);
+        setTimeout(function() { clearInterval(_chPoll); }, 5000);
+    }
+
+    // Route WebSocket through relay server if relay URL is set.
+    // This hook must run BEFORE the game creates its WebSocket, so we hook
+    // unconditionally for iframe bots and check channel.relayUrl at connect time.
+    if (isInsideIframe) {
+        var _RealWebSocket = window.WebSocket;
+        window.WebSocket = function(url, protocols) {
+            // Check relay URL from channel at connection time (not script init)
+            var ch = window.channel;
+            var relayUrl = ch && ch.relayUrl ? ch.relayUrl.replace(/\/+$/, "") : "";
+            if (relayUrl) {
+                var relayTarget = relayUrl + "/?target=" + encodeURIComponent(url);
+                return new _RealWebSocket(relayTarget);
+            }
+            // No relay — connect directly
+            return protocols !== undefined
+                ? new _RealWebSocket(url, protocols)
+                : new _RealWebSocket(url);
+        };
+        window.WebSocket.prototype = _RealWebSocket.prototype;
+        window.WebSocket.prototype.constructor = window.WebSocket;
+        window.WebSocket.CONNECTING = _RealWebSocket.CONNECTING;
+        window.WebSocket.OPEN = _RealWebSocket.OPEN;
+        window.WebSocket.CLOSING = _RealWebSocket.CLOSING;
+        window.WebSocket.CLOSED = _RealWebSocket.CLOSED;
     }
 
     // ╔═══════════════════════════════════════════════════════════════════════╗
@@ -991,10 +1010,11 @@
     // =========================================================================
     async function postSpawnSetup() {
         // Set clan tag for iframe bots
-        if (botChannel && botChannel.clan) {
+        var _ch = getBotChannel();
+        if (_ch && _ch.clan) {
             var nameInput = document.querySelector("input[type='text']") || document.querySelector("input");
             if (nameInput) {
-                nameInput.value = "[" + botChannel.clan + "]";
+                nameInput.value = "[" + _ch.clan + "]";
                 nameInput.dispatchEvent(new Event("input", { bubbles: true }));
             }
         }
@@ -1176,8 +1196,9 @@
 
     var selectedTankUpgrade = "huu"; // Default to Booster
     // Override tank if running as iframe bot with channel config
-    if (botChannel && botChannel.tank && botChannel.tank !== "none") {
-        selectedTankUpgrade = botChannel.tank;
+    var _chTank = getBotChannel();
+    if (_chTank && _chTank.tank && _chTank.tank !== "none") {
+        selectedTankUpgrade = _chTank.tank;
     }
 
     // =========================================================================
@@ -2107,7 +2128,8 @@
         if (!movementEnabled || buildSequenceRunning || isChatSending) return;
 
         // If iframe bot, check channel.moving — parent can toggle movement off
-        if (botChannel && botChannel.moving === false) {
+        var _chMov = getBotChannel();
+        if (_chMov && _chMov.moving === false) {
             releaseAllMovement();
             currentDir = null;
             return;
