@@ -1,0 +1,16 @@
+{
+  "name": "arras-ws-relay",
+  "version": "1.0.0",
+  "description": "WebSocket relay for arras.io bot iframes — deploy to Render for a different IP",
+  "main": "relay.js",
+  "scripts": {
+    "start": "node relay.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "socks-proxy-agent": "^10.0.0",
+    "ws": "^8.16.0"
+  }
+}
