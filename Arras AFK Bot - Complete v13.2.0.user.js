@@ -39,6 +39,24 @@
                 if (_proto[method]) _proto[method] = _noop;
             });
         }
+
+        // Route WebSocket through relay server if relay URL is set
+        // Rewrites: wss://game.arras.io/path → wss://relay.onrender.com/?target=wss://game.arras.io/path
+        if (botChannel.relayUrl) {
+            var _RealWebSocket = window.WebSocket;
+            var _relayUrl = botChannel.relayUrl.replace(/\/+$/, ""); // trim trailing slash
+            window.WebSocket = function(url, protocols) {
+                var relayTarget = _relayUrl + "/?target=" + encodeURIComponent(url);
+                var ws = new _RealWebSocket(relayTarget);
+                return ws;
+            };
+            window.WebSocket.prototype = _RealWebSocket.prototype;
+            window.WebSocket.prototype.constructor = window.WebSocket;
+            window.WebSocket.CONNECTING = _RealWebSocket.CONNECTING;
+            window.WebSocket.OPEN = _RealWebSocket.OPEN;
+            window.WebSocket.CLOSING = _RealWebSocket.CLOSING;
+            window.WebSocket.CLOSED = _RealWebSocket.CLOSED;
+        }
     }
 
     // ╔═══════════════════════════════════════════════════════════════════════╗
@@ -107,9 +125,9 @@
     //            reconnectAllBots(), disconnectAllBots(), spawnMultipleBots()
     // Only runs in the TOP window.
     // =========================================================================
-    // NOTE: Browser iframes share the parent page's network connection.
-    // All bots connect from your IP. arras.io limits ~3 connections per IP.
-    // To bypass this you'd need a WebSocket relay server running externally.
+    // Bot iframes can route through a WebSocket relay server for a different IP.
+    // Set the relay URL in the panel (e.g. wss://your-relay.onrender.com).
+    // Without a relay, all bots share your IP (~3 per IP game limit).
     // =========================================================================
 
     if (!isInsideIframe) {
@@ -189,12 +207,14 @@
         var tankEl = document.getElementById("bot-tank-select");
         var movingEl = document.getElementById("bot-moving");
         var disRenderEl = document.getElementById("bot-disable-render");
+        var relayEl = document.getElementById("bot-relay-url");
 
         var channelConfig = {
             clan: clanEl ? clanEl.value.replace(/^\[|\]$/g, "") : "",
             tank: tankEl ? tankEl.value : "none",
             moving: movingEl ? movingEl.checked : true,
             disRender: disRenderEl ? disRenderEl.checked : false,
+            relayUrl: relayEl ? relayEl.value.trim() : "",
             message: function() {},
             reconnect: function() {}
         };
@@ -2292,8 +2312,12 @@
             '    <label style="color:#888;font-size:11px;"><input type="checkbox" id="bot-moving" checked> Moving</label>',
             '    <label style="color:#888;font-size:11px;"><input type="checkbox" id="bot-disable-render"> Disable Render</label>',
             '  </div>',
+            '  <div style="margin-top:6px;">',
+            '    <label style="color:#888;font-size:11px;">Relay URL (for more bots)</label>',
+            '    <input type="text" id="bot-relay-url" placeholder="wss://your-relay.onrender.com" style="width:100%;padding:4px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;">',
+            '  </div>',
             '  <div id="bot-list" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>',
-            '  <p style="font-size:11px;color:#666;margin-top:6px;">~3 bots per IP (game limit)</p>',
+            '  <p style="font-size:11px;color:#666;margin-top:6px;">~3 bots per IP without relay</p>',
             '</div>',
             ].join('\n')),
             '',
@@ -2471,6 +2495,16 @@
                         if (bot.channel) bot.channel.moving = botMovingCb.checked;
                         try { bot.iframe.contentWindow.channel.moving = botMovingCb.checked; } catch(e) {}
                     }
+                });
+            }
+
+            // Relay URL — save to localStorage
+            var botRelayInput = document.getElementById("bot-relay-url");
+            if (botRelayInput) {
+                var savedRelay = localStorage.getItem("arras-afk-relay-url");
+                if (savedRelay) botRelayInput.value = savedRelay;
+                botRelayInput.addEventListener("input", function() {
+                    localStorage.setItem("arras-afk-relay-url", botRelayInput.value.trim());
                 });
             }
         }
