@@ -73,9 +73,9 @@
     // ╚═══════════════════════════════════════════════════════════════════════╝
 
     // =========================================================================
-    // [SECTION: BOT-SYSTEM] Bot Window & Proxy System
-    // Opens bot instances as separate windows (not iframes) so proxy extensions
-    // can route each window through a different SOCKS5 proxy.
+    // [SECTION: BOT-SYSTEM] Bot Iframe & Proxy System
+    // Opens bot instances as hidden iframes embedded in the page.
+    // Each iframe loads the game and runs the script independently.
     // Functions: createBotWindow(), removeBotWindow(), saveBotState()
     // Only runs in the TOP window.
     // =========================================================================
@@ -118,10 +118,9 @@
     var nextProxyIndex = 0;
 
     // =========================================================================
-    // [SECTION: BOT-WINDOWS] Bot Window System
-    // Opens separate browser windows/tabs for each bot instance.
-    // Separate windows allow proxy extensions to route each one differently.
-    // Each window's title includes the assigned proxy for easy identification.
+    // [SECTION: BOT-IFRAMES] Bot Iframe System
+    // Creates hidden iframes that load the game. Each iframe runs the
+    // Tampermonkey script independently as a separate bot instance.
     //
     // Functions: createBotWindow(), removeBotWindow(), updateBotList()
     // Only runs in the TOP window.
@@ -142,13 +141,13 @@
     function removeBotWindow(index) {
         if (window.botInstances[index]) {
             var bot = window.botInstances[index];
-            if (bot.win && !bot.win.closed) {
-                bot.win.close();
+            if (bot.iframe && bot.iframe.parentNode) {
+                bot.iframe.parentNode.removeChild(bot.iframe);
             }
             window.botInstances.splice(index, 1);
             saveBotState();
             updateBotList();
-            console.log("[AFK Bot] Closed bot window #" + (index + 1));
+            console.log("[AFK Bot] Removed bot iframe #" + (index + 1));
         }
     }
 
@@ -171,9 +170,9 @@
 
             var label = document.createElement("span");
             var proxyShort = bot.proxy ? bot.proxy.replace("socks5://", "") : "no proxy";
-            var status = (bot.win && !bot.win.closed) ? "open" : "closed";
+            var status = (bot.iframe && bot.iframe.parentNode) ? "running" : "stopped";
             label.textContent = "Bot #" + (i + 1) + " [" + proxyShort + "] (" + status + ")";
-            label.style.color = status === "open" ? "#4caf50" : "#f44336";
+            label.style.color = status === "running" ? "#4caf50" : "#f44336";
             botItem.appendChild(label);
 
             var closeBtn = document.createElement("button");
@@ -200,40 +199,22 @@
         var proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
         nextProxyIndex++;
 
-        // Open new window/tab to the game
-        var botWin = window.open(location.href, "_blank",
-            "width=400,height=300,menubar=no,toolbar=no,location=yes,status=no");
-
-        if (!botWin) {
-            console.log("[AFK Bot] Popup blocked! Allow popups for this site.");
-            alert("Popup blocked! Please allow popups for arras.io in your browser settings.");
-            return null;
-        }
+        // Create hidden iframe loading the game
+        var iframe = document.createElement("iframe");
+        iframe.src = location.href;
+        iframe.style.cssText = "width:1px;height:1px;position:fixed;bottom:0;right:0;opacity:0;pointer-events:none;border:none;";
+        iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+        document.body.appendChild(iframe);
 
         var botIndex = window.botInstances.length;
         var botObj = {
-            win: botWin,
+            iframe: iframe,
             index: botIndex,
             proxy: proxy
         };
         window.botInstances.push(botObj);
 
-        // Set window title to show proxy assignment
-        setTimeout(function() {
-            try {
-                botWin.document.title = "Bot #" + (botIndex + 1) + " | " + proxy;
-            } catch(e) {}
-        }, 2000);
-
-        // Monitor if window gets closed
-        var checkClosed = setInterval(function() {
-            if (botWin.closed) {
-                clearInterval(checkClosed);
-                updateBotList();
-            }
-        }, 3000);
-
-        console.log("[AFK Bot] Opened bot window #" + (botIndex + 1) + " with proxy: " + proxy);
+        console.log("[AFK Bot] Created bot iframe #" + (botIndex + 1) + " with proxy: " + proxy);
         saveBotState();
         updateBotList();
         return botObj;
@@ -2181,9 +2162,9 @@
             // Bot Windows section - only shown in top window
             (isInsideIframe ? '' : [
             '<div class="section">',
-            '  <h3>Bot Windows + Proxies</h3>',
-            '  <p><button id="btn-create-bot" class="btn btn-summon">+ Open Bot Window</button></p>',
-            '  <p style="font-size:11px;color:#888;">Each window gets a different proxy.<br/>Use FoxyProxy to route each tab through its assigned proxy.<br/>Window title shows which proxy to use.</p>',
+            '  <h3>Bot Iframes + Proxies</h3>',
+            '  <p><button id="btn-create-bot" class="btn btn-summon">+ Create Bot Iframe</button></p>',
+            '  <p style="font-size:11px;color:#888;">Each iframe runs a separate bot instance inside this page.<br/>No popups needed.</p>',
             '  <div id="bot-list" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>',
             '  <p style="font-size:11px;color:#666;margin-top:6px;">Proxies available: ' + PROXY_LIST.length + ' | Next: #' + (nextProxyIndex + 1) + '</p>',
             '</div>',
@@ -2662,9 +2643,8 @@
         updateGUI();
         lastCanvasActivity = Date.now();
 
-        // Note: Bot windows are NOT auto-restored on reload (can't reopen
-        // closed windows without user gesture). User clicks "+ Open Bot Window" manually.
-        // The bot list will show previously saved bots as "closed" state.
+        // Note: Bot iframes are NOT auto-restored on reload.
+        // User clicks "+ Create Bot Iframe" manually after reload.
 
         // Main movement loop
         setInterval(fluidMovementLoop, 50);
