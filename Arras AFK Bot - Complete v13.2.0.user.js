@@ -298,11 +298,16 @@
         // Hook setTransform to capture camera matrix
         var origSetTransform = proto.setTransform;
         proto.setTransform = function(a, b, c, d, e, f) {
-            // Store the transform — the game calls this to set up camera each frame
+            // Capture the game camera transform (not HUD/UI transforms)
+            // Game camera has: non-trivial zoom (a != 1), and offset from center
             if (this.canvas && this.canvas.width > 100) {
-                cameraTransform.a = a; cameraTransform.b = b;
-                cameraTransform.c = c; cameraTransform.d = d;
-                cameraTransform.e = e; cameraTransform.f = f;
+                // The game camera transform has a zoom factor != 1 and shifts the view
+                // HUD transforms are usually identity (a=1,d=1) or have b/c rotation
+                if (a === d && b === 0 && c === 0 && a !== 1 && a > 0.01) {
+                    cameraTransform.a = a; cameraTransform.b = b;
+                    cameraTransform.c = c; cameraTransform.d = d;
+                    cameraTransform.e = e; cameraTransform.f = f;
+                }
             }
             return origSetTransform.apply(this, arguments);
         };
@@ -1275,6 +1280,7 @@
     var followMouseEnabled = false; // Toggle: bot moves toward mouse cursor
     var mouseScreenX = 0; // Current mouse position on screen
     var mouseScreenY = 0;
+    var mouseWorldLogTime = 0; // Throttle debug logging
     var recentTextPositions = []; // Track {text, x, y, time} for position-based name matching
     var detectedChatMessages = []; // Chat messages seen on canvas
     var lastDetectedChats = {};    // Dedup: text -> timestamp
@@ -1852,18 +1858,27 @@
     }
 
     function pickBiasedDirection() {
-        // Follow mouse mode — move toward mouse cursor
+        // Follow mouse mode — move toward mouse cursor using camera transform
         if (followMouseEnabled) {
             var canvas = getCanvas();
             if (canvas) {
                 var rect = canvas.getBoundingClientRect();
-                var centerX = rect.left + rect.width / 2;
-                var centerY = rect.top + rect.height / 2;
-                var mdx = mouseScreenX - centerX;
-                var mdy = mouseScreenY - centerY;
-                var mDist = Math.hypot(mdx, mdy);
-                if (mDist > 30) {
-                    return pickDirectionIndex(mdx / mDist, mdy / mDist);
+                // Convert mouse screen position to canvas pixel position
+                var canvasX = (mouseScreenX - rect.left) * (canvas.width / rect.width);
+                var canvasY = (mouseScreenY - rect.top) * (canvas.height / rect.height);
+                // Convert canvas pixel position to game world coordinates
+                var mouseWorld = screenToWorld(canvasX, canvasY);
+                // Direction from bot's position to mouse world position
+                var mwdx = mouseWorld.x - grid.x;
+                var mwdy = mouseWorld.y - grid.y;
+                var mwDist = Math.hypot(mwdx, mwdy);
+                // Debug: log mouse world position periodically
+                if (!mouseWorldLogTime || Date.now() - mouseWorldLogTime > 2000) {
+                    mouseWorldLogTime = Date.now();
+                    console.log("[AFK Bot] Mouse world: (" + mouseWorld.x.toFixed(1) + "," + mouseWorld.y.toFixed(1) + ") bot: (" + grid.x.toFixed(1) + "," + grid.y.toFixed(1) + ") zoom:" + cameraTransform.a.toFixed(2));
+                }
+                if (mwDist > 2) {
+                    return pickDirectionIndex(mwdx / mwDist, mwdy / mwDist);
                 }
             }
         }
