@@ -53,15 +53,17 @@
     }
 
     // Route WebSocket through relay server if relay URL is set.
-    // This hook must run BEFORE the game creates its WebSocket, so we hook
-    // unconditionally for iframe bots and check channel.relayUrl at connect time.
+    // Reads relay URL from localStorage (shared between parent and iframe, same origin).
+    // window.channel isn't available at document-start because the iframe's contentWindow
+    // resets when src is set — localStorage survives that.
     if (isInsideIframe) {
         var _RealWebSocket = window.WebSocket;
         window.WebSocket = function(url, protocols) {
-            // Check relay URL from channel at connection time (not script init)
-            var ch = window.channel;
-            var relayUrl = ch && ch.relayUrl ? ch.relayUrl.replace(/\/+$/, "") : "";
-            if (relayUrl) {
+            // Read relay URL from localStorage (set by parent's GUI)
+            var relayUrl = "";
+            try { relayUrl = localStorage.getItem("arras-afk-relay-url") || ""; } catch(e) {}
+            relayUrl = relayUrl.replace(/\/+$/, "");
+            if (relayUrl && url && (url.indexOf("arras") !== -1 || url.indexOf("uvwx") !== -1)) {
                 var relayTarget = relayUrl + "/?target=" + encodeURIComponent(url);
                 return new _RealWebSocket(relayTarget);
             }
@@ -250,13 +252,15 @@
             } catch(e) {}
         }
 
-        // Inject immediately and on load
+        // Inject channel immediately and on load.
+        // Relay URL is read from localStorage by the iframe's own Tampermonkey instance
+        // (localStorage is shared since same origin, survives contentWindow reset).
         injectChannel();
         iframe.addEventListener("load", function() {
             injectChannel();
         });
 
-        // Set src AFTER attaching listeners so the load event fires
+        // Set src AFTER injecting hooks so they're in place when the page loads
         iframe.src = location.href;
 
         var botIndex = window.botInstances.length;
