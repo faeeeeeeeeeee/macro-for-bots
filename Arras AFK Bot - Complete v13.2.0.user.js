@@ -19,7 +19,7 @@
     // ║                                                                     ║
     // ║  Search for these tags to jump to each section:                      ║
     // ║                                                                     ║
-    // ║  [SECTION: BOT-SYSTEM]     - Bot windows + proxy assignment          ║
+    // ║  [SECTION: BOT-SYSTEM]     - Bot iframes + channel communication     ║
     // ║  [SECTION: COORD-DETECT]   - Canvas text coordinate detection       ║
     // ║  [SECTION: WEBSOCKET]      - WebSocket hook (intercepts game conn)  ║
     // ║  [SECTION: BROADCAST]      - BroadcastChannel & tab communication   ║
@@ -73,67 +73,16 @@
     // ╚═══════════════════════════════════════════════════════════════════════╝
 
     // =========================================================================
-    // [SECTION: BOT-SYSTEM] Bot Window & Proxy System
-    // Opens bot instances as separate popup windows.
-    // Functions: createBotWindow(), removeBotWindow(), saveBotState()
-    // Only runs in the TOP window.
-    // =========================================================================
-    // [SECTION: PROXY-LIST] SOCKS5 Proxy List
-    // Each bot window can be routed through a different proxy using a proxy
-    // extension (like FoxyProxy or Proxy SwitchyOmega).
-    // Proxies are assigned round-robin to new bot windows.
-    //
-    // HOW TO USE WITH FOXYPROXY:
-    //   1. Install FoxyProxy extension
-    //   2. Add each proxy below as a SOCKS5 entry in FoxyProxy settings
-    //   3. Set FoxyProxy to route by tab/pattern or use the assigned proxy
-    //   4. Each bot window title shows which proxy it should use
-    // =========================================================================
-    var PROXY_LIST = [
-        "socks5://192.252.209.155:14455",
-        "socks5://192.252.208.67:14287",
-        "socks5://123.54.197.16:21168",
-        "socks5://142.54.228.193:4145",
-        "socks5://123.54.197.19:22701",
-        "socks5://123.54.197.25:21715",
-        "socks5://123.54.197.50:21141",
-        "socks5://123.54.197.53:22917",
-        "socks5://142.54.231.38:4145",
-        "socks5://123.54.197.20:21281",
-        "socks5://170.233.30.33:4153",
-        "socks5://104.200.152.30:4145",
-        "socks5://221.202.27.194:10807",
-        "socks5://203.189.154.129:1080",
-        "socks5://123.54.197.52:20291",
-        "socks5://58.187.104.67:1090",
-        "socks5://208.65.90.3:4145",
-        "socks5://123.54.197.21:20909",
-        "socks5://174.77.111.198:49547",
-        "socks5://123.54.197.24:20969",
-        "socks5://98.191.0.47:4145",
-        "socks5://98.182.147.97:4145",
-        "socks5://123.54.197.51:21977"
-    ];
-    var nextProxyIndex = 0;
-
-    // =========================================================================
-    // [SECTION: BOT-IFRAMES] Bot Iframe System
-    // Creates iframes that load the game. Each iframe runs the script as a bot.
-    // Functions: createBotWindow(), removeBotWindow(), updateBotList()
+    // [SECTION: BOT-SYSTEM] Bot Iframe System
+    // Creates iframe bot instances that load the game. Each iframe runs the
+    // script as a bot. Parent communicates via iframe.contentWindow.channel.
+    // Functions: createBotWindow(), removeBotWindow(), updateBotList(),
+    //            reconnectAllBots(), disconnectAllBots(), spawnMultipleBots()
     // Only runs in the TOP window.
     // =========================================================================
     if (!isInsideIframe) {
 
     window.botInstances = [];
-
-    function saveBotState() {
-        var botData = [];
-        for (var i = 0; i < window.botInstances.length; i++) {
-            var bot = window.botInstances[i];
-            botData.push({ id: i, proxy: bot.proxy });
-        }
-        localStorage.setItem("arras-afk-bots", JSON.stringify(botData));
-    }
 
     function removeBotWindow(index) {
         if (window.botInstances[index]) {
@@ -142,7 +91,6 @@
                 bot.iframe.parentNode.removeChild(bot.iframe);
             }
             window.botInstances.splice(index, 1);
-            saveBotState();
             updateBotList();
         }
     }
@@ -165,9 +113,8 @@
             botItem.style.fontSize = "11px";
 
             var label = document.createElement("span");
-            var proxyShort = bot.proxy ? bot.proxy.replace("socks5://", "") : "no proxy";
             var status = (bot.iframe && bot.iframe.parentNode) ? "running" : "stopped";
-            label.textContent = "Bot #" + (i + 1) + " [" + proxyShort + "] (" + status + ")";
+            label.textContent = "Bot #" + (i + 1) + " (" + status + ")";
             label.style.color = status === "running" ? "#4caf50" : "#f44336";
             botItem.appendChild(label);
 
@@ -199,36 +146,76 @@
     document.body.appendChild(botIframeContainer);
 
     function createBotWindow() {
-        // Assign proxy round-robin
-        var proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
-        nextProxyIndex++;
-
-        // Create iframe — same approach as the working arras bot script
         var iframe = document.createElement("iframe");
         iframe.src = location.href;
         iframe.width = 60;
         iframe.height = 40;
         botIframeContainer.appendChild(iframe);
 
-        // Mark the iframe's window as a bot so the script inside knows
         var iframeWin = iframe.contentWindow;
         iframeWin.__is_bot = true;
+
+        // Set up channel for parent-to-bot communication
+        iframeWin.channel = {
+            message: function() {}
+        };
+
+        // Read current settings from GUI (if available)
+        var clanEl = document.getElementById("bot-clan-tag");
+        var tankEl = document.getElementById("bot-tank-select");
+        var movingEl = document.getElementById("bot-moving");
+        var disRenderEl = document.getElementById("bot-disable-render");
+
+        iframeWin.channel.clan = clanEl ? clanEl.value.replace(/^\[|\]$/g, "") : "";
+        iframeWin.channel.tank = tankEl ? tankEl.value : "none";
+        iframeWin.channel.moving = movingEl ? movingEl.checked : true;
+        iframeWin.channel.disRender = disRenderEl ? disRenderEl.checked : false;
 
         var botIndex = window.botInstances.length;
         var botObj = {
             iframe: iframe,
-            index: botIndex,
-            proxy: proxy
+            index: botIndex
         };
         window.botInstances.push(botObj);
 
-        saveBotState();
         updateBotList();
         return botObj;
     }
 
+    function reconnectAllBots() {
+        for (var i = 0; i < window.botInstances.length; i++) {
+            var bot = window.botInstances[i];
+            try {
+                if (bot.iframe && bot.iframe.contentWindow && bot.iframe.contentWindow.channel) {
+                    bot.iframe.contentWindow.channel.reconnect();
+                }
+            } catch(e) {}
+        }
+    }
+
+    function disconnectAllBots() {
+        botIframeContainer.innerHTML = "";
+        window.botInstances = [];
+        updateBotList();
+    }
+
+    function spawnMultipleBots(count) {
+        if (isNaN(count) || count < 1) return;
+        var spawned = 0;
+        function spawnNext() {
+            if (spawned >= count) return;
+            createBotWindow();
+            spawned++;
+            setTimeout(spawnNext, 150);
+        }
+        spawnNext();
+    }
+
     window.createBotWindow = createBotWindow;
     window.removeBotWindow = removeBotWindow;
+    window.reconnectAllBots = reconnectAllBots;
+    window.disconnectAllBots = disconnectAllBots;
+    window.spawnMultipleBots = spawnMultipleBots;
     } // end if (!isInsideIframe)
 
     // =========================================================================
@@ -2170,11 +2157,29 @@
             // Bot Iframes section - only shown in top window
             (isInsideIframe ? '' : [
             '<div class="section">',
-            '  <h3>Bot Iframes + Proxies</h3>',
+            '  <h3>Bot Iframes</h3>',
             '  <p><button id="btn-create-bot" class="btn btn-summon">+ Create Bot</button></p>',
-            '  <p style="font-size:11px;color:#888;">Each bot runs in an iframe. No popups needed.</p>',
+            '  <p style="margin-top:6px;">',
+            '    Count: <input type="number" id="bot-spawn-count" value="10" min="1" max="50" style="width:60px;padding:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;">',
+            '    <button id="btn-spawn-multiple" class="btn btn-summon" style="font-size:11px;padding:4px 10px;">Spawn Multiple</button>',
+            '  </p>',
+            '  <p style="margin-top:6px;">',
+            '    <button id="btn-reconnect-bots" class="btn btn-summon" style="font-size:11px;padding:4px 10px;">Reconnect All</button>',
+            '    <button id="btn-disconnect-bots" class="btn btn-summon" style="font-size:11px;padding:4px 10px;background:#f44336;">Disconnect All</button>',
+            '  </p>',
+            '  <div style="margin-top:8px;">',
+            '    <label style="color:#888;font-size:11px;">Bot Tank</label>',
+            '    <select id="bot-tank-select" style="width:100%;padding:4px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;"></select>',
+            '  </div>',
+            '  <div style="margin-top:6px;">',
+            '    <label style="color:#888;font-size:11px;">Clan Tag</label>',
+            '    <input type="text" id="bot-clan-tag" placeholder="[TAG]" style="width:100%;padding:4px;margin-top:4px;background:#1a1a2e;color:#fff;border:1px solid #333;border-radius:4px;font-size:11px;">',
+            '  </div>',
+            '  <div style="margin-top:6px;display:flex;gap:12px;align-items:center;">',
+            '    <label style="color:#888;font-size:11px;"><input type="checkbox" id="bot-moving" checked> Moving</label>',
+            '    <label style="color:#888;font-size:11px;"><input type="checkbox" id="bot-disable-render"> Disable Render</label>',
+            '  </div>',
             '  <div id="bot-list" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>',
-            '  <p style="font-size:11px;color:#666;margin-top:6px;">Proxies available: ' + PROXY_LIST.length + ' | Next: #' + (nextProxyIndex + 1) + '</p>',
             '</div>',
             ].join('\n')),
             '',
@@ -2285,12 +2290,71 @@
             updateGUI();
         });
 
-        // Bot window button (only in top window)
+        // Bot iframe buttons (only in top window)
         if (!isInsideIframe) {
             document.getElementById("btn-create-bot").addEventListener("click", function() {
                 var bot = window.createBotWindow();
-                if (bot) setStatus("Opened bot window #" + (bot.index + 1) + " | " + bot.proxy);
+                if (bot) setStatus("Created bot #" + (bot.index + 1));
             });
+
+            document.getElementById("btn-spawn-multiple").addEventListener("click", function() {
+                var count = parseInt(document.getElementById("bot-spawn-count").value, 10);
+                window.spawnMultipleBots(count);
+                setStatus("Spawning " + count + " bots...");
+            });
+
+            document.getElementById("btn-reconnect-bots").addEventListener("click", function() {
+                window.reconnectAllBots();
+                setStatus("Reconnecting all bots...");
+            });
+
+            document.getElementById("btn-disconnect-bots").addEventListener("click", function() {
+                window.disconnectAllBots();
+                setStatus("Disconnected all bots");
+            });
+
+            // Populate bot tank select dropdown
+            var botTankSelect = document.getElementById("bot-tank-select");
+            if (botTankSelect) {
+                var noneOpt = document.createElement("option");
+                noneOpt.value = "none";
+                noneOpt.textContent = "None (no upgrade)";
+                botTankSelect.appendChild(noneOpt);
+                for (var tid in tankUpgrades) {
+                    if (tankUpgrades.hasOwnProperty(tid)) {
+                        var opt = document.createElement("option");
+                        opt.value = tid;
+                        opt.textContent = tankUpgrades[tid].name;
+                        botTankSelect.appendChild(opt);
+                    }
+                }
+                botTankSelect.addEventListener("change", function() {
+                    for (var i = 0; i < window.botInstances.length; i++) {
+                        try { window.botInstances[i].iframe.contentWindow.channel.tank = botTankSelect.value; } catch(e) {}
+                    }
+                });
+            }
+
+            // Clan tag sync to all bots
+            var botClanInput = document.getElementById("bot-clan-tag");
+            if (botClanInput) {
+                botClanInput.addEventListener("input", function() {
+                    var tag = botClanInput.value.replace(/^\[|\]$/g, "").trim();
+                    for (var i = 0; i < window.botInstances.length; i++) {
+                        try { window.botInstances[i].iframe.contentWindow.channel.clan = tag; } catch(e) {}
+                    }
+                });
+            }
+
+            // Moving toggle sync to all bots
+            var botMovingCb = document.getElementById("bot-moving");
+            if (botMovingCb) {
+                botMovingCb.addEventListener("change", function() {
+                    for (var i = 0; i < window.botInstances.length; i++) {
+                        try { window.botInstances[i].iframe.contentWindow.channel.moving = botMovingCb.checked; } catch(e) {}
+                    }
+                });
+            }
         }
 
         // Tank selection dropdown
