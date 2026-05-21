@@ -150,4 +150,14 @@ server.listen(PORT, () => {
     console.log(`arras-ws-relay listening on port ${PORT}`);
     console.log(`Max connections: ${MAX_CONNECTIONS}`);
     console.log(`Health: http://localhost:${PORT}/health`);
+
+    // Self-ping to prevent Render free tier from sleeping (pings every 4 minutes)
+    if (process.env.RENDER_EXTERNAL_URL || process.env.RENDER) {
+        const selfUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+        setInterval(() => {
+            const http = require(selfUrl.startsWith("https") ? "https" : "http");
+            http.get(`${selfUrl}/health`, () => {}).on("error", () => {});
+        }, 4 * 60 * 1000);
+        console.log("Self-ping enabled (every 4 min to prevent sleep)");
+    }
 });

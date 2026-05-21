@@ -216,6 +216,25 @@
     botIframeContainer.style.zIndex = "1";
     document.body.appendChild(botIframeContainer);
 
+    // Pre-warm relay on first bot create (wakes up Render free tier)
+    var relayWarmed = false;
+    function warmRelay(callback) {
+        var relayEl = document.getElementById("bot-relay-url");
+        var relayUrl = relayEl ? relayEl.value.trim() : "";
+        if (!relayUrl || relayWarmed) { callback(); return; }
+        // Convert wss:// to https:// for the health check fetch
+        var healthUrl = relayUrl.replace(/^wss:\/\//, "https://").replace(/^ws:\/\//, "http://").replace(/\/+$/, "") + "/health";
+        fetch(healthUrl).then(function() {
+            relayWarmed = true;
+            callback();
+        }).catch(function() {
+            // Retry once after 2s (cold start)
+            setTimeout(function() {
+                fetch(healthUrl).then(function() { relayWarmed = true; callback(); }).catch(function() { callback(); });
+            }, 2000);
+        });
+    }
+
     function createBotWindow() {
         var iframe = document.createElement("iframe");
         iframe.width = 60;
@@ -2457,13 +2476,15 @@
         // Bot iframe buttons (only in top window)
         if (!isInsideIframe) {
             document.getElementById("btn-create-bot").addEventListener("click", function() {
-                var bot = window.createBotWindow();
-                if (bot) setStatus("Created bot #" + (bot.index + 1));
+                warmRelay(function() {
+                    var bot = window.createBotWindow();
+                    if (bot) setStatus("Created bot #" + (bot.index + 1));
+                });
             });
 
             document.getElementById("btn-spawn-multiple").addEventListener("click", function() {
                 var count = parseInt(document.getElementById("bot-spawn-count").value, 10);
-                window.spawnMultipleBots(count);
+                warmRelay(function() { window.spawnMultipleBots(count); });
                 setStatus("Spawning " + count + " bots...");
             });
 
