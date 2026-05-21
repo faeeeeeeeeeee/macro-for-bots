@@ -73,9 +73,8 @@
     // ╚═══════════════════════════════════════════════════════════════════════╝
 
     // =========================================================================
-    // [SECTION: BOT-SYSTEM] Bot Iframe & Proxy System
-    // Opens bot instances as hidden iframes embedded in the page.
-    // Each iframe loads the game and runs the script independently.
+    // [SECTION: BOT-SYSTEM] Bot Window & Proxy System
+    // Opens bot instances as separate popup windows.
     // Functions: createBotWindow(), removeBotWindow(), saveBotState()
     // Only runs in the TOP window.
     // =========================================================================
@@ -118,10 +117,8 @@
     var nextProxyIndex = 0;
 
     // =========================================================================
-    // [SECTION: BOT-IFRAMES] Bot Iframe System
-    // Creates hidden iframes that load the game. Each iframe runs the
-    // Tampermonkey script independently as a separate bot instance.
-    //
+    // [SECTION: BOT-WINDOWS] Bot Window System
+    // Opens separate browser windows for each bot instance.
     // Functions: createBotWindow(), removeBotWindow(), updateBotList()
     // Only runs in the TOP window.
     // =========================================================================
@@ -141,13 +138,12 @@
     function removeBotWindow(index) {
         if (window.botInstances[index]) {
             var bot = window.botInstances[index];
-            if (bot.iframe && bot.iframe.parentNode) {
-                bot.iframe.parentNode.removeChild(bot.iframe);
+            if (bot.win && !bot.win.closed) {
+                bot.win.close();
             }
             window.botInstances.splice(index, 1);
             saveBotState();
             updateBotList();
-
         }
     }
 
@@ -170,9 +166,9 @@
 
             var label = document.createElement("span");
             var proxyShort = bot.proxy ? bot.proxy.replace("socks5://", "") : "no proxy";
-            var status = (bot.iframe && bot.iframe.parentNode) ? "running" : "stopped";
+            var status = (bot.win && !bot.win.closed) ? "open" : "closed";
             label.textContent = "Bot #" + (i + 1) + " [" + proxyShort + "] (" + status + ")";
-            label.style.color = status === "running" ? "#4caf50" : "#f44336";
+            label.style.color = status === "open" ? "#4caf50" : "#f44336";
             botItem.appendChild(label);
 
             var closeBtn = document.createElement("button");
@@ -199,21 +195,37 @@
         var proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
         nextProxyIndex++;
 
-        // Create offscreen iframe loading the game
-        var iframe = document.createElement("iframe");
-        iframe.src = location.href;
-        // Real size so canvas initializes, but offscreen and non-interactive
-        iframe.style.cssText = "width:400px;height:300px;position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;border:none;";
-        document.body.appendChild(iframe);
+        // Open new window/tab to the game
+        var botWin = window.open(location.href, "_blank",
+            "width=400,height=300,menubar=no,toolbar=no,location=yes,status=no");
+
+        if (!botWin) {
+            alert("Popup blocked! Allow popups for arras.io in your browser settings.");
+            return null;
+        }
 
         var botIndex = window.botInstances.length;
         var botObj = {
-            iframe: iframe,
+            win: botWin,
             index: botIndex,
             proxy: proxy
         };
         window.botInstances.push(botObj);
 
+        // Set window title to show proxy assignment
+        setTimeout(function() {
+            try {
+                botWin.document.title = "Bot #" + (botIndex + 1) + " | " + proxy;
+            } catch(e) {}
+        }, 2000);
+
+        // Monitor if window gets closed
+        var checkClosed = setInterval(function() {
+            if (botWin.closed) {
+                clearInterval(checkClosed);
+                updateBotList();
+            }
+        }, 3000);
 
         saveBotState();
         updateBotList();
@@ -265,52 +277,30 @@
     var lastReconnectAttempt = 0;
     var RECONNECT_COOLDOWN = 0;
 
-    // Camera transform tracking — captures the canvas transform matrix
-    // so we can convert between screen coords and game-world coords
-    var cameraTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; // current 2D affine matrix
+    // Camera transform tracking — uses ctx.getTransform() at render time
+    // to read the exact current transform matrix for coordinate conversion
+    var cameraTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 
     function screenToWorld(screenX, screenY) {
-        // Inverse of affine: [a c e; b d f; 0 0 1]
-        var det = cameraTransform.a * cameraTransform.d - cameraTransform.b * cameraTransform.c;
+        var t = cameraTransform;
+        var det = t.a * t.d - t.b * t.c;
         if (Math.abs(det) < 0.0001) return { x: 0, y: 0 };
-        var invA = cameraTransform.d / det;
-        var invB = -cameraTransform.b / det;
-        var invC = -cameraTransform.c / det;
-        var invD = cameraTransform.a / det;
-        var invE = (cameraTransform.c * cameraTransform.f - cameraTransform.d * cameraTransform.e) / det;
-        var invF = (cameraTransform.b * cameraTransform.e - cameraTransform.a * cameraTransform.f) / det;
         return {
-            x: invA * screenX + invC * screenY + invE,
-            y: invB * screenX + invD * screenY + invF
+            x: (t.d * (screenX - t.e) - t.c * (screenY - t.f)) / det,
+            y: (-t.b * (screenX - t.e) + t.a * (screenY - t.f)) / det
         };
     }
 
     function worldToScreen(worldX, worldY) {
+        var t = cameraTransform;
         return {
-            x: cameraTransform.a * worldX + cameraTransform.c * worldY + cameraTransform.e,
-            y: cameraTransform.b * worldX + cameraTransform.d * worldY + cameraTransform.f
+            x: t.a * worldX + t.c * worldY + t.e,
+            y: t.b * worldX + t.d * worldY + t.f
         };
     }
 
     function hookCanvasText() {
         var proto = CanvasRenderingContext2D.prototype;
-
-        // Hook setTransform to capture camera matrix
-        var origSetTransform = proto.setTransform;
-        proto.setTransform = function(a, b, c, d, e, f) {
-            // Capture the game camera transform (not HUD/UI transforms)
-            // Game camera has: non-trivial zoom (a != 1), and offset from center
-            if (this.canvas && this.canvas.width > 100) {
-                // The game camera transform has a zoom factor != 1 and shifts the view
-                // HUD transforms are usually identity (a=1,d=1) or have b/c rotation
-                if (a === d && b === 0 && c === 0 && a !== 1 && a > 0.01) {
-                    cameraTransform.a = a; cameraTransform.b = b;
-                    cameraTransform.c = c; cameraTransform.d = d;
-                    cameraTransform.e = e; cameraTransform.f = f;
-                }
-            }
-            return origSetTransform.apply(this, arguments);
-        };
 
         var origFillText = proto.fillText;
         proto.fillText = function(text, x, y) {
@@ -333,6 +323,17 @@
 
         if (textSamples.indexOf(text) === -1 && textSamples.length < 50) {
             textSamples.push(text);
+        }
+
+        // Opportunistically capture game camera transform from any text render
+        // The game camera has a non-identity scale (a != 1) when zoomed
+        if (ctx.getTransform) {
+            var gt = ctx.getTransform();
+            if (gt.a !== 1 && Math.abs(gt.a) > 0.01 && gt.b === 0 && gt.c === 0) {
+                cameraTransform.a = gt.a; cameraTransform.b = gt.b;
+                cameraTransform.c = gt.c; cameraTransform.d = gt.d;
+                cameraTransform.e = gt.e; cameraTransform.f = gt.f;
+            }
         }
 
         var lowerText = text.toLowerCase().trim();
@@ -375,31 +376,33 @@
             var followLower = followPlayerName.toLowerCase();
             var textLower = text.toLowerCase();
             if (textLower.indexOf(followLower) !== -1) {
-                // x, y from fillText are in the game's local coordinate space
-                // Convert to screen coords using the current camera transform
-                var screenPos = worldToScreen(x, y);
+                // Grab the CURRENT canvas transform at the moment this text is rendered
+                // ctx.getTransform() returns the exact matrix the game is using right now
+                var txf = ctx.getTransform ? ctx.getTransform() : null;
                 var cvs2 = ctx.canvas;
+
+                // Calculate screen position: apply the transform to the fillText coords
+                var screenX = txf ? (txf.a * x + txf.c * y + txf.e) : x;
+                var screenY = txf ? (txf.b * x + txf.d * y + txf.f) : y;
 
                 // Skip leaderboard: text on the right 25% of screen
                 var isLeaderboard = false;
                 if (cvs2) {
-                    if (screenPos.x > cvs2.width * 0.70) isLeaderboard = true;
+                    if (screenX > cvs2.width * 0.70) isLeaderboard = true;
                 }
                 if (/^\d+[\.\)]\s/.test(text) || /^#\d+/.test(text)) isLeaderboard = true;
 
                 if (!isLeaderboard) {
-                    // Store both the game-world coords and screen coords
                     followPlayerPos = {
-                        x: screenPos.x, y: screenPos.y, // screen position
-                        worldX: x, worldY: y,             // game rendering coords
+                        x: screenX, y: screenY,
                         time: Date.now()
                     };
                     followRoaming = false;
 
-                    // Calculate screen distance from center
+                    // Screen distance and direction from center
                     if (cvs2) {
-                        var fdx = screenPos.x - cvs2.width / 2;
-                        var fdy = screenPos.y - cvs2.height / 2;
+                        var fdx = screenX - cvs2.width / 2;
+                        var fdy = screenY - cvs2.height / 2;
                         var fdist = Math.hypot(fdx, fdy);
                         followPlayerPos.screenDist = fdist;
                         if (fdist > 1) {
@@ -408,18 +411,20 @@
                         }
                     }
 
-                    // Convert screen offset from center → world offset using camera zoom
-                    // Screen center = bot's position, zoom = cameraTransform.a
-                    if (cvs2 && Math.abs(cameraTransform.a) > 0.001) {
-                        var worldOffX = (screenPos.x - cvs2.width / 2) / cameraTransform.a;
-                        var worldOffY = (screenPos.y - cvs2.height / 2) / cameraTransform.d;
+                    // Convert screen offset to world offset using the transform's scale
+                    if (cvs2 && txf && Math.abs(txf.a) > 0.001) {
+                        // Store the transform for screenToWorld conversion
+                        cameraTransform.a = txf.a; cameraTransform.b = txf.b;
+                        cameraTransform.c = txf.c; cameraTransform.d = txf.d;
+                        cameraTransform.e = txf.e; cameraTransform.f = txf.f;
+
+                        var worldOffX = (screenX - cvs2.width / 2) / txf.a;
+                        var worldOffY = (screenY - cvs2.height / 2) / txf.d;
                         followLastSeenGrid = {
                             x: grid.x + worldOffX,
                             y: grid.y + worldOffY
                         };
                     }
-
-
                 }
             }
         }
@@ -2170,9 +2175,9 @@
             // Bot Windows section - only shown in top window
             (isInsideIframe ? '' : [
             '<div class="section">',
-            '  <h3>Bot Iframes + Proxies</h3>',
-            '  <p><button id="btn-create-bot" class="btn btn-summon">+ Create Bot Iframe</button></p>',
-            '  <p style="font-size:11px;color:#888;">Each iframe runs a separate bot instance inside this page.<br/>No popups needed.</p>',
+            '  <h3>Bot Windows + Proxies</h3>',
+            '  <p><button id="btn-create-bot" class="btn btn-summon">+ Open Bot Window</button></p>',
+            '  <p style="font-size:11px;color:#888;">Each window gets a different proxy.<br/>Allow popups for arras.io if blocked.</p>',
             '  <div id="bot-list" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>',
             '  <p style="font-size:11px;color:#666;margin-top:6px;">Proxies available: ' + PROXY_LIST.length + ' | Next: #' + (nextProxyIndex + 1) + '</p>',
             '</div>',
@@ -2651,8 +2656,8 @@
         updateGUI();
         lastCanvasActivity = Date.now();
 
-        // Note: Bot iframes are NOT auto-restored on reload.
-        // User clicks "+ Create Bot Iframe" manually after reload.
+        // Note: Bot windows are NOT auto-restored on reload.
+        // User clicks "+ Open Bot Window" manually after reload.
 
         // Main movement loop
         setInterval(fluidMovementLoop, 50);
