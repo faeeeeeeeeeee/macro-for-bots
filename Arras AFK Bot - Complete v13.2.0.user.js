@@ -147,7 +147,7 @@
             window.botInstances.splice(index, 1);
             saveBotState();
             updateBotList();
-            console.log("[AFK Bot] Removed bot iframe #" + (index + 1));
+
         }
     }
 
@@ -214,7 +214,7 @@
         };
         window.botInstances.push(botObj);
 
-        console.log("[AFK Bot] Created bot iframe #" + (botIndex + 1) + " with proxy: " + proxy);
+
         saveBotState();
         updateBotList();
         return botObj;
@@ -342,7 +342,7 @@
         if (lowerText === "play" && !playDetected) {
             playDetected = true;
             (async () => {
-                console.log("[AFK Bot] Play detected. Waiting 3 seconds for game to load...");
+
                 await delay(3000);
                 pressEnter();
                 await delay(200);
@@ -419,11 +419,7 @@
                         };
                     }
 
-                    if (!followPlayerPos._logged) {
-                        var wPos = followLastSeenGrid || {x:0,y:0};
-                        console.log("[AFK Bot] Following: '" + text + "' screen(" + screenPos.x.toFixed(0) + "," + screenPos.y.toFixed(0) + ") worldEst(" + wPos.x.toFixed(1) + "," + wPos.y.toFixed(1) + ") zoom=" + cameraTransform.a.toFixed(2));
-                        followPlayerPos._logged = true;
-                    }
+
                 }
             }
         }
@@ -432,7 +428,6 @@
         if (lowerText === "disconnect" || lowerText === "disconnected" || lowerText.includes("disconnect")) {
             if (!disconnectDetected) {
                 disconnectDetected = true;
-                console.log("[AFK Bot] DISCONNECT detected - initiating reconnect...");
                 handleReconnect();
             }
             return;
@@ -457,7 +452,7 @@
 
             if (!coordDetectionDone) {
                 coordDetectionDone = true;
-                console.log("[AFK Bot] Coordinates detected! Initial: " + text);
+
             }
 
             lastCoordText = text;
@@ -469,7 +464,7 @@
                 reconnectDetected = false;
                 disconnectDetected = false;
                 playDetected = false;
-                console.log("[AFK Bot] Back in game - connection restored");
+
             }
         }
     }
@@ -479,7 +474,7 @@
         if (now - lastReconnectAttempt < 10000) return;
         lastReconnectAttempt = now;
 
-        console.log("[AFK Bot] Disconnect detected. Reloading page...");
+
 
         // Save flag so the bot knows to join back after the refresh
         sessionStorage.setItem('pendingAutoEnter', 'true');
@@ -524,7 +519,7 @@
             : new _OrigWebSocket(url);
 
         gameWebSocket = ws;
-        console.log("[AFK Bot] WebSocket intercepted:", url);
+
 
         ws.addEventListener('message', function() { wsMsgCount++; });
         return ws;
@@ -558,7 +553,7 @@
     var altTabs = {};
     var myTabId = Math.random().toString(36).substr(2, 8);
     var isLeader = false;
-    console.log("[AFK Bot] Tab ID: " + myTabId);
+
     var followLeader = true;
     var botChannel = null;
     var lastBroadcastTime = 0;
@@ -592,11 +587,11 @@
             }
         };
     } catch(e) {
-        console.log("[AFK Bot] BroadcastChannel not available:", e);
+
     }
 
     function executeRemoteCommand(command, value) {
-        console.log("[AFK Bot] Executing command from leader:", command, value);
+
         switch(command) {
             case 'toggle_movement':
                 movementEnabled = value !== undefined ? value : !movementEnabled;
@@ -1178,12 +1173,11 @@
 
         var upgrade = tankUpgrades[selectedTankUpgrade];
         if (!upgrade) {
-            console.log("[AFK Bot] No upgrade selected, skipping build sequence");
             buildSequenceRunning = false;
             return;
         }
 
-        console.log("[AFK Bot] Running build for: " + upgrade.name);
+
 
         // Upgrade to tank using the path (keys are queued by the game)
         // Generous delays between keys to avoid the game missing inputs
@@ -1420,7 +1414,7 @@
         if (!chatDetectionReady) {
             if (now - scriptLoadTime < 5000) return;
             chatDetectionReady = true;
-            console.log("[AFK Bot] Chat detection ready (5s startup delay passed)");
+
         }
         // Dedup: same text within 5 seconds is a re-render
         if (lastDetectedChats[text] && now - lastDetectedChats[text] < 5000) return;
@@ -1445,7 +1439,7 @@
 
             // Try to identify who said this
             var speaker = findSpeaker(chatX, chatY);
-            console.log("[AFK Bot] Chat confirmed: " + text + (speaker ? " (from: " + speaker + ")" : " (unknown speaker)"));
+
             detectedChatMessages.push({ text: text, time: now, speaker: speaker });
             if (detectedChatMessages.length > 10) detectedChatMessages.shift();
 
@@ -1508,9 +1502,9 @@
                 conversationTimeout = setTimeout(function() {
                     inConversation = false;
                     conversationPartner = null;
-                    console.log("[AFK Bot] Conversation ended (25s no chat)");
+
                 }, 25000);
-                console.log("[AFK Bot] Responding (" + triggerReason + ")");
+
                 respondToChat(text);
             }
         }, 200);
@@ -1550,7 +1544,7 @@
         isChatSending = true;
         blockAllKeys = true; // Block ALL simulateKey dispatches (movement, etc.)
 
-        console.log("[AFK Bot] Sending chat: " + message);
+
 
         // Store own message so we don't respond to our own chat bubble
         ownSentMessages[message] = Date.now();
@@ -1599,7 +1593,7 @@
             await delay(200);
         } else {
             // Fallback: type via window keypresses if input not found
-            console.log("[AFK Bot] Chat input not found, trying keyboard fallback");
+
             for (var i = 0; i < message.length; i++) {
                 var ch = message[i];
                 var keyCode = ch.charCodeAt(0);
@@ -1627,17 +1621,17 @@
     // Call Google Gemini API
     async function callGemini(prompt) {
         if (!geminiApiKey) {
-            console.log("[AFK Bot] No Gemini API key set");
+
             return null;
         }
         // Skip if rate-limited (wait 60 seconds after a 429)
         if (Date.now() < geminiRateLimitUntil) {
-            console.log("[AFK Bot] Rate-limited, waiting " + Math.ceil((geminiRateLimitUntil - Date.now()) / 1000) + "s");
+
             return null;
         }
         try {
             var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" + geminiApiKey;
-            console.log("[AFK Bot] Calling Gemini...");
+
             var controller = new AbortController();
             var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
             var response = await fetch(url, {
@@ -1651,7 +1645,7 @@
             });
             clearTimeout(timeoutId);
             if (response.status === 429) {
-                console.log("[AFK Bot] Gemini rate limited! Pausing for 60s");
+
                 geminiRateLimitUntil = Date.now() + 60000;
                 return null;
             }
@@ -1662,20 +1656,20 @@
                     text = data.candidates[0].content.parts[0].text || "";
                 }
                 text = text.trim().replace(/[\n\r"]/g, " ").replace(/\*\*/g, "").trim();
-                console.log("[AFK Bot] Gemini raw: " + text.substring(0, 100));
+
                 if (text.length < 2 || text.length > 200) return null;
                 // Take first sentence if too long
                 var firstLine = text.split(/[.!?]\s/)[0];
                 if (firstLine.length > CHATBOT_MAX_LENGTH) firstLine = firstLine.substring(0, CHATBOT_MAX_LENGTH);
                 if (firstLine.length < 2) return null;
-                console.log("[AFK Bot] Gemini reply: " + firstLine);
+
                 return firstLine;
             } else {
                 var errText = await response.text();
-                console.log("[AFK Bot] Gemini status " + response.status + ": " + errText.substring(0, 100));
+                console.warn("[AFK Bot] Gemini error " + response.status);
             }
         } catch (e) {
-            console.log("[AFK Bot] Gemini error: " + (e.name === "AbortError" ? "timed out 15s" : e.message));
+            console.warn("[AFK Bot] Gemini: " + (e.name === "AbortError" ? "timed out" : e.message));
         }
         return null;
     }
@@ -1700,7 +1694,7 @@
         var lower = text.toLowerCase();
         for (var i = 0; i < BLOCKED_RESPONSE_WORDS.length; i++) {
             if (lower.indexOf(BLOCKED_RESPONSE_WORDS[i]) !== -1) {
-                console.log("[AFK Bot] Blocked inappropriate response: " + text);
+
                 return false;
             }
         }
@@ -1714,7 +1708,7 @@
             if (!isResponseAppropriate(reply)) return null;
             return reply;
         }
-        console.log("[AFK Bot] AI failed, staying silent");
+
         return null;
     }
 
@@ -1875,7 +1869,6 @@
                 // Debug: log mouse world position periodically
                 if (!mouseWorldLogTime || Date.now() - mouseWorldLogTime > 2000) {
                     mouseWorldLogTime = Date.now();
-                    console.log("[AFK Bot] Mouse world: (" + mouseWorld.x.toFixed(1) + "," + mouseWorld.y.toFixed(1) + ") bot: (" + grid.x.toFixed(1) + "," + grid.y.toFixed(1) + ") zoom:" + cameraTransform.a.toFixed(2));
                 }
                 if (mwDist > 2) {
                     return pickDirectionIndex(mwdx / mwDist, mwdy / mwDist);
@@ -1979,7 +1972,7 @@
             if (distMoved < WALL_MOVE_THRESHOLD && currentDirIndex === lastWallCheck.dir) {
                 var wallKey = DIRECTIONS[currentDirIndex].name;
                 wallMemory[wallKey] = { time: now, x: grid.x, y: grid.y };
-                console.log("[AFK Bot] Wall detected in direction: " + wallKey);
+
 
                 wallAvoidanceMode = true;
                 wallAvoidanceStartTime = now;
@@ -2327,7 +2320,7 @@
             tankSelect.addEventListener("change", function() {
                 selectedTankUpgrade = this.value;
                 updateTankDisplay();
-                console.log("[AFK Bot] Selected tank: " + tankUpgrades[selectedTankUpgrade].name);
+
             });
         }
 
@@ -2637,7 +2630,7 @@
         // Backslash toggles follow-mouse mode
         if (e.code === "Backslash") {
             followMouseEnabled = !followMouseEnabled;
-            console.log("[AFK Bot] Follow mouse: " + (followMouseEnabled ? "ON" : "OFF"));
+
             setStatus(followMouseEnabled ? "Following mouse" : "Moving");
             updateGUI();
         }
@@ -2689,18 +2682,7 @@
             }
         }, 5000);
 
-        console.log("[AFK Bot] v13.2 active — Full features + Iframe Bots + Fixed Reconnect");
-        console.log("[AFK Bot] Tab ID: " + myTabId);
-        console.log("=== HOTKEYS ===");
-        console.log("ESC  - Open/close panel");
-        console.log("[    - Toggle Movement");
-        console.log("]    - Toggle Auto-Respawn");
-        console.log("=== FEATURES ===");
-        console.log("✓ Fluid movement with wall avoidance");
-        console.log("✓ Auto-reconnect on disconnect");
-        console.log("✓ Bot instances as iframes (no separate windows)");
-        console.log("✓ Leader/follower mode");
-        console.log("✓ Coordinate tracking & auto-respawn");
+        console.log("[AFK Bot] v13.2 ready");
     }
 
     if (document.readyState === "complete" || document.readyState === "interactive") {
