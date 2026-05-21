@@ -22,9 +22,9 @@
     var botChannel = (isInsideIframe && window.channel) ? window.channel : null;
 
     if (isInsideIframe && botChannel) {
-        // Provide reconnect function to parent (deferred — pressEnter defined later)
+        // Provide reconnect function to parent (deferred — postSpawnSetup defined later)
         botChannel.reconnect = function() {
-            try { pressEnter(); } catch(e) {}
+            try { postSpawnSetup(); } catch(e) {}
         };
 
         // Disable canvas rendering for performance if parent requested it
@@ -446,27 +446,8 @@
         if (lowerText === "play" && !playDetected) {
             playDetected = true;
             (async () => {
-
                 await delay(3000);
-                // If running as iframe bot, set clan tag in the name input
-                if (botChannel && botChannel.clan) {
-                    var nameInput = document.querySelector("input[type='text']") || document.querySelector("input");
-                    if (nameInput) {
-                        nameInput.value = "[" + botChannel.clan + "]";
-                        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
-                    }
-                }
-                pressEnter();
-                await delay(500);
-                // Press L to enable coordinate display (required for position tracking)
-                await tapKey("KeyL", "l");
-                await delay(200);
-                // Iframe bots: enable autofire (press E) so they shoot automatically
-                if (isInsideIframe) {
-                    await tapKey("KeyE", "e");
-                    await delay(100);
-                }
-                runBuildSequence();
+                await postSpawnSetup();
             })();
         }
 
@@ -597,16 +578,11 @@
         if (now - lastReconnectAttempt < 10000) return;
         lastReconnectAttempt = now;
 
-
-
-        // Save flag so the bot knows to join back after the refresh
-        sessionStorage.setItem('pendingAutoEnter', 'true');
-
         if (document.activeElement && document.activeElement.tagName === "INPUT") {
             document.activeElement.blur();
         }
 
-        // Reload to get back to the play button
+        // Reload → play detection fires → postSpawnSetup() handles everything
         window.location.reload();
     }
 
@@ -1016,7 +992,37 @@
         });
         document.dispatchEvent(ev2);
         // NOTE: build sequence is NOT called here — it's called separately
-        // by the play detection and death handler to avoid double execution.
+        // by postSpawnSetup to avoid double execution.
+    }
+
+    // =========================================================================
+    // [SECTION: POST-SPAWN] Unified post-spawn setup
+    // Called after every spawn/respawn. Handles: clan tag, KeyL, autofire, build.
+    // =========================================================================
+    async function postSpawnSetup() {
+        // Set clan tag for iframe bots
+        if (botChannel && botChannel.clan) {
+            var nameInput = document.querySelector("input[type='text']") || document.querySelector("input");
+            if (nameInput) {
+                nameInput.value = "[" + botChannel.clan + "]";
+                nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        }
+
+        pressEnter();
+        await delay(500);
+
+        // Press L to enable coordinate display
+        await tapKey("KeyL", "l");
+        await delay(200);
+
+        // Iframe bots: enable autofire
+        if (isInsideIframe) {
+            await tapKey("KeyE", "e");
+            await delay(100);
+        }
+
+        await runBuildSequence();
     }
 
     // =========================================================================
@@ -1274,17 +1280,14 @@
             releaseAllMovement();
             currentDir = null;
 
-            setTimeout(function() {
-                pressEnter();
-            }, 10);
-
-            setTimeout(function() {
+            // Use the same postSpawnSetup as initial join for consistency
+            // (handles: clan tag, Enter, KeyL, autofire, build sequence)
+            (async function() {
+                await delay(500);
                 respawnCount++;
-                setStatus("Running build sequence...");
-                runBuildSequence(); // Only build call — pressEnter no longer triggers one
-            }, 1000);
-            // isDead stays true until build sequence completes (set false in runBuildSequence)
-            // Old value of 500ms caused re-detection of "respawn" text before build finished
+                setStatus("Respawning...");
+                await postSpawnSetup();
+            })();
         }
     }
 
