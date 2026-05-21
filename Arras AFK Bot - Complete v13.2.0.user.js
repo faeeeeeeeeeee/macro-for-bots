@@ -333,6 +333,7 @@
     window.reconnectAllBots = reconnectAllBots;
     window.disconnectAllBots = disconnectAllBots;
     window.spawnMultipleBots = spawnMultipleBots;
+    window.warmRelay = warmRelay;
     } // end if (!isInsideIframe)
 
     // =========================================================================
@@ -2476,7 +2477,7 @@
         // Bot iframe buttons (only in top window)
         if (!isInsideIframe) {
             document.getElementById("btn-create-bot").addEventListener("click", function() {
-                warmRelay(function() {
+                window.warmRelay(function() {
                     var bot = window.createBotWindow();
                     if (bot) setStatus("Created bot #" + (bot.index + 1));
                 });
@@ -2484,7 +2485,7 @@
 
             document.getElementById("btn-spawn-multiple").addEventListener("click", function() {
                 var count = parseInt(document.getElementById("bot-spawn-count").value, 10);
-                warmRelay(function() { window.spawnMultipleBots(count); });
+                window.warmRelay(function() { window.spawnMultipleBots(count); });
                 setStatus("Spawning " + count + " bots...");
             });
 
