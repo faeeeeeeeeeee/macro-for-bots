@@ -1,32 +1,55 @@
 // arras-ws-relay: WebSocket relay for arras.io bot connections
-// Deploy to Render/Railway/Fly.io to give bots a different IP.
+// Routes through SOCKS5 proxies to bypass Cloudflare IP restrictions.
 //
 // How it works:
 //   1. Bot iframe's WebSocket hook rewrites the game URL:
-//      wss://game-server.arras.io/path → wss://your-relay.onrender.com/relay?target=wss://game-server.arras.io/path
-//   2. Relay opens a WebSocket to the real game server
+//      wss://game-server → wss://your-relay.onrender.com/?target=wss://game-server
+//   2. Relay picks a SOCKS5 proxy (round-robin) and connects through it
 //   3. All messages are piped bidirectionally (binary, transparent)
-//   4. Game server sees the relay's IP, not yours
+//   4. Game server sees the proxy's residential IP, not yours or the relay's
 //
-// Deploy to Render:
-//   1. Push this repo to GitHub
-//   2. Go to https://render.com → New → Web Service
-//   3. Connect your repo, set Root Directory to "ws-relay"
-//   4. Build Command: npm install
-//   5. Start Command: node relay.js
-//   6. Plan: Free
-//   7. Done! Your relay URL will be: wss://your-service-name.onrender.com
+// Environment variables:
+//   PORT            - listen port (default 3000, Render sets this)
+//   MAX_CONNECTIONS - max simultaneous relay connections (default 20)
+//   PROXY_LIST      - comma-separated SOCKS5 proxies, e.g.:
+//                     socks5://1.2.3.4:1080,socks5://5.6.7.8:4145
+//                     If empty, connects directly (won't bypass Cloudflare)
 
 const http = require("http");
 const { WebSocketServer, WebSocket } = require("ws");
 
+let SocksProxyAgent;
+try {
+    SocksProxyAgent = require("socks-proxy-agent").SocksProxyAgent;
+} catch (e) {
+    console.warn("socks-proxy-agent not installed — proxy routing disabled");
+}
+
 const PORT = process.env.PORT || 3000;
 const MAX_CONNECTIONS = parseInt(process.env.MAX_CONNECTIONS || "20", 10);
 
+// Parse proxy list from environment
+const PROXY_LIST = (process.env.PROXY_LIST || "")
+    .split(",")
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
+
+let nextProxyIndex = 0;
 let activeConnections = 0;
 
+function getNextProxy() {
+    if (PROXY_LIST.length === 0) return null;
+    const proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
+    nextProxyIndex++;
+    return proxy;
+}
+
+// Valid WebSocket close codes: 1000-1015 or 3000-4999
+function isValidCloseCode(code) {
+    return (code >= 1000 && code <= 1015) || (code >= 3000 && code <= 4999);
+}
+
 const server = http.createServer((req, res) => {
-    // CORS headers for health check
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET");
 
@@ -35,7 +58,9 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({
             status: "ok",
             connections: activeConnections,
-            maxConnections: MAX_CONNECTIONS
+            maxConnections: MAX_CONNECTIONS,
+            proxies: PROXY_LIST.length,
+            proxyMode: PROXY_LIST.length > 0 ? "socks5" : "direct"
         }));
         return;
     }
@@ -46,7 +71,6 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (clientWs, req) => {
-    // Extract target game server URL from query parameter
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
     const target = urlObj.searchParams.get("target");
 
@@ -74,15 +98,24 @@ wss.on("connection", (clientWs, req) => {
     }
 
     activeConnections++;
-    console.log(`[+] Relay → ${target} (active: ${activeConnections})`);
 
-    // Connect to the real game server with browser-like headers
-    const gameWs = new WebSocket(target, {
+    // Pick a proxy (round-robin) or connect directly
+    const proxy = getNextProxy();
+    const wsOptions = {
         headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Origin": "https://arras.io"
         }
-    });
+    };
+
+    if (proxy && SocksProxyAgent) {
+        wsOptions.agent = new SocksProxyAgent(proxy);
+        console.log(`[+] Relay → ${target} via ${proxy} (active: ${activeConnections})`);
+    } else {
+        console.log(`[+] Relay → ${target} DIRECT (active: ${activeConnections})`);
+    }
+
+    const gameWs = new WebSocket(target, wsOptions);
 
     let clientOpen = true;
     let gameOpen = false;
@@ -98,7 +131,7 @@ wss.on("connection", (clientWs, req) => {
         pendingMessages.length = 0;
     });
 
-    // Client → Game (forward everything, binary-safe)
+    // Client → Game
     clientWs.on("message", (data, isBinary) => {
         if (gameOpen) {
             gameWs.send(data, { binary: isBinary });
@@ -107,7 +140,7 @@ wss.on("connection", (clientWs, req) => {
         }
     });
 
-    // Game → Client (forward everything, binary-safe)
+    // Game → Client
     gameWs.on("message", (data, isBinary) => {
         if (clientOpen && clientWs.readyState === WebSocket.OPEN) {
             clientWs.send(data, { binary: isBinary });
@@ -126,7 +159,8 @@ wss.on("connection", (clientWs, req) => {
     gameWs.on("close", (code, reason) => {
         gameOpen = false;
         if (clientOpen && clientWs.readyState === WebSocket.OPEN) {
-            clientWs.close(code || 1000, reason ? reason.toString().slice(0, 120) : "");
+            const safeCode = isValidCloseCode(code) ? code : 1000;
+            clientWs.close(safeCode, reason ? reason.toString().slice(0, 120) : "");
         }
     });
 
@@ -149,15 +183,19 @@ wss.on("connection", (clientWs, req) => {
 server.listen(PORT, () => {
     console.log(`arras-ws-relay listening on port ${PORT}`);
     console.log(`Max connections: ${MAX_CONNECTIONS}`);
+    console.log(`Proxies: ${PROXY_LIST.length > 0 ? PROXY_LIST.length + " SOCKS5" : "NONE (direct mode)"}`);
+    if (PROXY_LIST.length > 0) {
+        PROXY_LIST.forEach((p, i) => console.log(`  [${i}] ${p}`));
+    }
     console.log(`Health: http://localhost:${PORT}/health`);
 
-    // Self-ping to prevent Render free tier from sleeping (pings every 4 minutes)
+    // Self-ping to prevent Render free tier from sleeping
     if (process.env.RENDER_EXTERNAL_URL || process.env.RENDER) {
         const selfUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
         setInterval(() => {
-            const http = require(selfUrl.startsWith("https") ? "https" : "http");
-            http.get(`${selfUrl}/health`, () => {}).on("error", () => {});
+            const httpMod = require(selfUrl.startsWith("https") ? "https" : "http");
+            httpMod.get(`${selfUrl}/health`, () => {}).on("error", () => {});
         }, 4 * 60 * 1000);
-        console.log("Self-ping enabled (every 4 min to prevent sleep)");
+        console.log("Self-ping enabled (every 4 min)");
     }
 });
