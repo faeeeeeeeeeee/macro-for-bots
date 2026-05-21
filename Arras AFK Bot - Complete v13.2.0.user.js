@@ -199,11 +199,11 @@
         var proxy = PROXY_LIST[nextProxyIndex % PROXY_LIST.length];
         nextProxyIndex++;
 
-        // Create hidden iframe loading the game
+        // Create offscreen iframe loading the game
         var iframe = document.createElement("iframe");
         iframe.src = location.href;
-        iframe.style.cssText = "width:1px;height:1px;position:fixed;bottom:0;right:0;opacity:0;pointer-events:none;border:none;";
-        iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+        // Real size so canvas initializes, but offscreen and non-interactive
+        iframe.style.cssText = "width:400px;height:300px;position:fixed;top:-9999px;left:-9999px;opacity:0;pointer-events:none;border:none;";
         document.body.appendChild(iframe);
 
         var botIndex = window.botInstances.length;
